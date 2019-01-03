@@ -63,6 +63,7 @@ def make_app(cfg, baselayer_handlers, baselayer_settings):
     model_util.create_tables()
     model_util.create_indexes()
     model_util.setup_permissions()
+    model_util.create_groups_and_users()
     app.cfg = cfg
 
     return app
