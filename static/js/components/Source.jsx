@@ -12,7 +12,7 @@ import Responsive from "./Responsive";
 import FoldBox from "./FoldBox";
 
 
-const Source = ({ ra, dec, redshift, thumbnails, id }) => {
+const Source = ({ ra, dec, red_shift, thumbnails, id }) => {
   if (id === undefined) {
     return (
       <div>
@@ -46,10 +46,10 @@ Location:
 )
           <br />
           <b>
-Redshift:
+Red Shift:
             {' '}
           </b>
-          {redshift}
+          {red_shift}
           <br />
           <ThumbnailList ra={ra} dec={dec} thumbnails={thumbnails} />
 
@@ -104,13 +104,13 @@ Redshift:
 Source.propTypes = {
   ra: PropTypes.number.isRequired,
   dec: PropTypes.number.isRequired,
-  redshift: PropTypes.number,
+  red_shift: PropTypes.number,
   id: PropTypes.string.isRequired,
   thumbnails: PropTypes.arrayOf(PropTypes.object).isRequired
 };
 
 Source.defaultProps = {
-  redshift: null
+  red_shift: null
 };
 
 export default Source;

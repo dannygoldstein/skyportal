@@ -83,15 +83,16 @@ class Source(Base):
     # TODO should this column type be decimal? fixed-precison numeric
     ra = sa.Column(sa.Float)
     dec = sa.Column(sa.Float)
-    redshift = sa.Column(sa.Float, nullable=True)
+    red_shift = sa.Column(sa.Float, nullable=True)
 
     groups = relationship('Group', secondary='group_sources', cascade='all')
     comments = relationship('Comment', back_populates='source', cascade='all',
                             order_by="Comment.created_at")
     photometry = relationship('Photometry', back_populates='source',
-                              cascade='all', order_by="Photometry.jd")
+                              cascade='all',
+                              order_by="Photometry.observed_at")
     spectra = relationship('Spectrum', back_populates='source', cascade='all',
-                           order_by="Spectrum.jd")
+                           order_by="Spectrum.observed_at")
     thumbnails = relationship('Thumbnail', back_populates='source',
                               secondary='photometry', cascade='all')
 
@@ -187,7 +188,9 @@ User.comments = relationship('Comment', back_populates='user', cascade='all',
 
 class Photometry(Base):
     __tablename__ = 'photometry'
-    jd = sa.Column(sa.Float, nullable=False)  
+    observed_at = sa.Column(sa.DateTime)
+    time_format = sa.Column(sa.String, default='iso')
+    time_scale = sa.Column(sa.String, default='tcb')
     mag = sa.Column(sa.Float)
     e_mag = sa.Column(sa.Float)
     lim_mag = sa.Column(sa.Float)
@@ -196,7 +199,7 @@ class Photometry(Base):
     dec = sa.Column(sa.Float)
 
     source_id = sa.Column(sa.ForeignKey('sources.id', ondelete='CASCADE'),
-                          nullable=False, index=True)
+                          nullable=True, index=True)
     source = relationship('Source', back_populates='photometry', cascade='all')
     instrument_id = sa.Column(sa.ForeignKey('instruments.id',
                                             ondelete='CASCADE'),
@@ -216,7 +219,7 @@ class Spectrum(Base):
     source_id = sa.Column(sa.ForeignKey('sources.id', ondelete='CASCADE'),
                           nullable=False, index=True)
     source = relationship('Source', back_populates='spectra', cascade='all')
-    jd = sa.Column(sa.Float, nullable=False)
+    observed_at = sa.Column(sa.DateTime, nullable=False)
     # TODO program?
     instrument_id = sa.Column(sa.ForeignKey('instruments.id',
                                             ondelete='CASCADE'),
@@ -225,14 +228,14 @@ class Spectrum(Base):
                               cascade='all')
 
     @classmethod
-    def from_ascii(cls, filename, source_id, instrument_id, jd):
+    def from_ascii(cls, filename, source_id, instrument_id, observed_at):
         data = np.loadtxt(filename)
         if data.shape[1] != 2:  # TODO support other formats
             raise ValueError(f"Expected 2 columns, got {data.shape[1]}")
 
         return cls(wavelengths=data[:, 0], fluxes=data[:, 1],
                    source_id=source_id, instrument_id=instrument_id,
-                   jd=jd)
+                   observed_at=observed_at)
 
 
 #def format_public_url(context):

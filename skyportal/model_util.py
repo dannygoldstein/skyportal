@@ -19,6 +19,7 @@ def create_indexes():
         DBSession().execute(text(f'CREATE INDEX ON {table} (q3c_ang2ipix(ra, dec))'))
         DBSession().execute(text(f'CLUSTER {table}_q3c_ang2ipix_idx on {table}'))
         DBSession().execute(text(f'ANALYZE {table}'))
+    DBSession().execute('CREATE SEQUENCE namenum')
     DBSession().commit()
 
 def add_super_user(username):
@@ -73,6 +74,27 @@ def create_token(group_id, permissions=[], created_by_id=None, description=None)
     DBSession().commit()
     return t.id
 
+def create_groups_and_users():
+
+    with status(f"Creating dummy users"):
+        g = Group(name='Stream A')
+        super_admin_user = User(username='testuser@cesium-ml.org',
+                                role_ids=['Super admin'])
+        group_admin_user = User(username='groupadmin@cesium-ml.org',
+                                role_ids=['Super admin'])
+        DBSession().add_all(
+            [GroupUser(group=g, user=super_admin_user, admin=True),
+             GroupUser(group=g, user=group_admin_user, admin=True)]
+        )
+        full_user = User(username='fulluser@cesium-ml.org',
+                         role_ids=['Full user'], groups=[g])
+        DBSession().add_all([super_admin_user, group_admin_user,
+                             full_user])
+
+        for u in [super_admin_user, group_admin_user, full_user]:
+            DBSession().add(TornadoStorage.user.create_social_auth(u, u.username,
+                                                                   'google-oauth2'))        
+
 
 if __name__ == "__main__":
     """Insert test data"""
@@ -94,38 +116,6 @@ if __name__ == "__main__":
     with status(f"Creating permissions"):
         setup_permissions()
 
-    with status(f"Creating dummy users"):
-        g = Group(name='Stream A')
-        super_admin_user = User(username='testuser@cesium-ml.org',
-                                role_ids=['Super admin'])
-        group_admin_user = User(username='groupadmin@cesium-ml.org',
-                                role_ids=['Super admin'])
-        DBSession().add_all(
-            [GroupUser(group=g, user=super_admin_user, admin=True),
-             GroupUser(group=g, user=group_admin_user, admin=True)]
-        )
-        full_user = User(username='fulluser@cesium-ml.org',
-                         role_ids=['Full user'], groups=[g])
-        DBSession().add_all([super_admin_user, group_admin_user,
-                             full_user])
-
-        for u in [super_admin_user, group_admin_user, full_user]:
-            DBSession().add(TornadoStorage.user.create_social_auth(u, u.username,
-                                                                   'google-oauth2'))
-
-    with status("Creating dummy instruments"):
-        t1 = Telescope(name='Palomar 1.5m', nickname='P60',
-                       lat=33.3633675, lon=-116.8361345, elevation=1870,
-                       diameter=1.5)
-        i1 = Instrument(telescope=t1, name='P60 Camera', type='phot',
-                        band='optical')
-
-        t2 = Telescope(name='Nordic Optical Telescope', nickname='NOT',
-                       lat=28.75, lon=17.88, elevation=2327,
-                       diameter=2.56)
-        i2 = Instrument(telescope=t2, name='ALFOSC', type='both',
-                        band='optical')
-        DBSession().add_all([i1, i2])
 
     with status("Creating dummy sources"):
         SOURCES = [{'id': '14gqr', 'ra': 353.36647, 'dec': 33.646149, 'redshift': 0.063,
