@@ -6,7 +6,7 @@ RUN apt-get update && \
     apt-get update && \
     apt-get -y upgrade && \
     apt-get install -y python3.6 python3.6-venv python3.6-dev \
-                       libpq-dev supervisor \
+                       libpq-dev supervisor openssh-server \
                        git nginx nodejs postgresql-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
@@ -38,9 +38,13 @@ RUN bash -c "\
     \
     cp docker.yaml config.yaml"
 
-USER skyportal
+RUN mkdir -p static/thumbnails /var/run/sshd /run/sshd /root/.ssh && \
+    echo 'root:root' |chpasswd && \
+    sed -ri 's/^#?PermitRootLogin\s+.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
 
-EXPOSE 5000
+EXPOSE 5000 5001 22
+
 
 CMD bash -c "source /skyportal_env/bin/activate && \
              (make log &) && \

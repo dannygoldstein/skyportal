@@ -145,6 +145,7 @@ def _plot_to_json(plot):
     return docs_json, render_items, custom_model_js
 
 
+
 # TODO make async so that thread isn't blocked
 def photometry_plot(source_id):
     """Create scatter plot of photometry for source.
@@ -176,36 +177,57 @@ def photometry_plot(source_id):
     data['label'] = [f'{t} {f}-band'
                      for t, f in zip(data['telescope'], data['filter'])]
     data['observed'] = ~np.isnan(data.mag)
-    split = data.groupby(('label', 'observed'))
+    split = data.groupby('label', sort=False)
 
     plot = figure(
         plot_width=600,
         plot_height=300,
         active_drag='box_zoom',
         tools='box_zoom,wheel_zoom,pan,reset',
-        y_range=(np.nanmax(data['mag']) + 0.1,
-                 np.nanmin(data['mag']) - 0.1)
+        y_range=(np.nanmax(data['mag'] + data['e_mag']) + 0.1,
+                 np.nanmin(data['mag'] - data['e_mag']) - 0.1)
     )
+
+    hover = HoverTool(tooltips=[('observed_at', '@observed_at{%D}'), ('mag', '@mag'),
+                                ('lim_mag', '@lim_mag'),
+                                ('filter', '@filter'),
+                                ('e_mag' ,'@e_mag')],
+                      formatters={'observed_at': 'datetime'})
+    plot.add_tools(hover)
+    
     model_dict = {}
-    for i, ((label, is_obs), df) in enumerate(split):
-        key = ("" if is_obs else "un") + 'obs' + str(i // 2)
-        model_dict[key] = plot.scatter(
-            x='observed_at', y='mag' if is_obs else 'lim_mag',
-            color='color',
-            marker='circle' if is_obs else 'inverted_triangle',
-            fill_color='color' if is_obs else 'white',
-            source=ColumnDataSource(df)
-        )
+    for i, (label, ddff) in enumerate(split):
+        for is_obs, df in ddff.groupby('observed'):
+            key = ("" if is_obs else "un") + 'obs' + str(i)
+            model_dict[key] = plot.scatter(
+                x='observed_at', y='mag' if is_obs else 'lim_mag',
+                color='color',
+                marker='circle' if is_obs else 'inverted_triangle',
+                fill_color='color' if is_obs else 'white',
+                source=ColumnDataSource(df)
+            )
+
+            hover.renderers.append(model_dict[key])
+
+            if is_obs:
+                key = 'obserr' + str(i)
+                y_err_x = []
+                y_err_y = []
+
+                for d, ro in df.iterrows():
+                    px = ro['observed_at']
+                    py = ro['mag']
+                    err = ro['e_mag']
+
+                    y_err_x.append((px, px))
+                    y_err_y.append((py - err, py + err))
+                model_dict[key] = plot.multi_line(y_err_x, y_err_y, color=df['color'])
+
     plot.xaxis.axis_label = 'Observation Date'
     plot.xaxis.formatter = DatetimeTickFormatter(hours=['%D'], days=['%D'],
                                                  months=['%D'], years=['%D'])
     plot.toolbar.logo = None
 
-    hover = HoverTool(tooltips=[('observed_at', '@observed_at{%D}'), ('mag', '@mag'),
-                                ('lim_mag', '@lim_mag'),
-                                ('filter', '@filter')],
-                      formatters={'observed_at': 'datetime'})
-    plot.add_tools(hover)
 
     toggle = CheckboxWithLegendGroup(
         labels=list(data.label.unique()),
@@ -217,8 +239,18 @@ def photometry_plot(source_id):
     toggle.callback = CustomJS(args={'toggle': toggle, **model_dict},
                                code="""
         for (let i = 0; i < toggle.labels.length; i++) {
-            eval("obs" + i).visible = (toggle.active.includes(i))
-            eval("unobs" + i).visible = (toggle.active.includes(i));
+            try {
+                eval("obs" + i).visible = (toggle.active.includes(i));
+            } catch (err)  {
+            }
+            try {         
+                eval("obserr" + i).visible = (toggle.active.includes(i));
+            } catch (err) {
+            }
+            try {
+                eval("unobs" + i).visible = (toggle.active.includes(i));
+            } catch (err)  {
+            }
         }
     """)
 
@@ -231,6 +263,9 @@ def spectroscopy_plot(source_id):
     """TODO normalization? should this be handled at data ingestion or plot-time?"""
     source = Source.query.get(source_id)
     spectra = Source.query.get(source_id).spectra
+
+    if len(spectra) == 0:
+        return None, None, None
 
     color_map = dict(zip([s.id for s in spectra], viridis(len(spectra))))
     data = pd.concat(

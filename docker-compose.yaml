@@ -3,8 +3,11 @@ web:
   ports:
     - "9000:5000"
     - "9001:5001"
+    - "222:22"
   links:
     - db
+  volumes:
+    - ./skyportal:/skyportal/skyportal
 
 db:
   build: ./q3c
