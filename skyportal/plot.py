@@ -12,7 +12,10 @@ from bokeh.plotting import figure, ColumnDataSource
 from bokeh.util.compiler import bundle_all_models
 from bokeh.util.serialization import make_id
 
-from skyportal.models import (DBSession, Source, Photometry,
+from sncosmo.photdata import PhotometricData
+from astropy.table import Table
+
+from skyportal.models import (DBSession, Source, ForcedPhotometry,
                               Instrument, Telescope)
 
 
@@ -163,20 +166,24 @@ def photometry_plot(source_id):
     color_map = {'ipr': 'yellow', 'rpr': 'red', 'g': 'green'}
 
     data = pd.read_sql(DBSession()
-                       .query(Photometry, Telescope.nickname.label('telescope'))
+                       .query(ForcedPhotometry, Telescope.nickname.label('telescope'))
                        .join(Instrument).join(Telescope)
-                       .filter(Photometry.source_id == source_id)
+                       .filter(ForcedPhotometry.source_id == source_id)
                        .statement, DBSession().bind)
     if data.empty:
         return None, None, None
 
-    for col in ['mag', 'e_mag', 'lim_mag']:
-        # TODO remove magic number; where can this logic live?
-        data.loc[np.abs(data[col]) > 90, col] = np.nan
     data['color'] = [color_map.get(f, 'black') for f in data['filter']]
     data['label'] = [f'{t} {f}-band'
                      for t, f in zip(data['telescope'], data['filter'])]
-    data['observed'] = ~np.isnan(data.mag)
+
+    # normalize everything to a common zeropoint
+    photdata = PhotometricData(Table(data[['mjd', 'filter', 'flux', 'fluxerr', 'zp', 'zpsys']]))
+    normalized = photdata.normalized(zp=25., zpsys='ab')
+
+    data['flux'] = normalized.flux
+    data['fluxerr'] = normalized.fluxerr
+
     split = data.groupby('label', sort=False)
 
     plot = figure(
@@ -184,26 +191,24 @@ def photometry_plot(source_id):
         plot_height=300,
         active_drag='box_zoom',
         tools='box_zoom,wheel_zoom,pan,reset',
-        y_range=(np.nanmax(data['mag'] + data['e_mag']) + 0.1,
-                 np.nanmin(data['mag'] - data['e_mag']) - 0.1)
+        y_range=(np.nanmax(data['flux'] + data['fluxerr']) * 1.1,
+                 np.nanmin(data['flux'] - data['fluxerr']) - np.abs(np.nanmin(data['flux'] - data['fluxerr'])) * 0.1)
     )
 
-    hover = HoverTool(tooltips=[('observed_at', '@observed_at{%D}'), ('mag', '@mag'),
-                                ('lim_mag', '@lim_mag'),
+    hover = HoverTool(tooltips=[('mjd', '@mjd'), ('flux', '@flux'),
                                 ('filter', '@filter'),
-                                ('e_mag' ,'@e_mag')],
-                      formatters={'observed_at': 'datetime'})
+                                ('fluxerr', '@fluxerr')])
     plot.add_tools(hover)
-    
+
     model_dict = {}
     for i, (label, ddff) in enumerate(split):
         for is_obs, df in ddff.groupby('observed'):
             key = ("" if is_obs else "un") + 'obs' + str(i)
             model_dict[key] = plot.scatter(
-                x='observed_at', y='mag' if is_obs else 'lim_mag',
+                x='mjd', y='flux',
                 color='color',
-                marker='circle' if is_obs else 'inverted_triangle',
-                fill_color='color' if is_obs else 'white',
+                marker='circle',
+                fill_color='color',
                 source=ColumnDataSource(df)
             )
 
@@ -215,19 +220,16 @@ def photometry_plot(source_id):
                 y_err_y = []
 
                 for d, ro in df.iterrows():
-                    px = ro['observed_at']
-                    py = ro['mag']
-                    err = ro['e_mag']
+                    px = ro['mjd']
+                    py = ro['flux']
+                    err = ro['fluxerr']
 
                     y_err_x.append((px, px))
                     y_err_y.append((py - err, py + err))
                 model_dict[key] = plot.multi_line(y_err_x, y_err_y, color=df['color'])
 
-    plot.xaxis.axis_label = 'Observation Date'
-    plot.xaxis.formatter = DatetimeTickFormatter(hours=['%D'], days=['%D'],
-                                                 months=['%D'], years=['%D'])
+    plot.xaxis.axis_label = 'MJD'
     plot.toolbar.logo = None
-
 
     toggle = CheckboxWithLegendGroup(
         labels=list(data.label.unique()),
