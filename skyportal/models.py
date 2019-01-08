@@ -186,6 +186,30 @@ User.comments = relationship('Comment', back_populates='user', cascade='all',
                              order_by="Comment.created_at")
 
 
+class ForcedPhotometry(Base):
+
+    __tablename__ = 'forcedphotometry'
+    mjd = sa.Column(sa.Float)
+    flux = sa.Column(sa.Float)
+    fluxerr = sa.Column(sa.Float)
+    ra = sa.Column(sa.Float)
+    dec = sa.Column(sa.Float)
+    zp = sa.Column(sa.Float)
+    zpsys = sa.Column(sa.String, default='ab')
+    lim_mag = sa.Column(sa.Float)
+
+
+    source_id = sa.Column(sa.ForeignKey('sources.id', ondelete='CASCADE'),
+                          nullable=True, index=True)
+    source = relationship('Source', back_populates='photometry', cascade='all')
+    instrument_id = sa.Column(sa.ForeignKey('instruments.id',
+                                            ondelete='CASCADE'),
+                              nullable=False, index=True)
+    instrument = relationship('Instrument', back_populates='photometry',
+                              cascade='all')
+
+
+
 class Photometry(Base):
     __tablename__ = 'photometry'
     observed_at = sa.Column(sa.DateTime)
