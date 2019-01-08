@@ -197,7 +197,7 @@ class ForcedPhotometry(Base):
     zp = sa.Column(sa.Float)
     zpsys = sa.Column(sa.String, default='ab')
     lim_mag = sa.Column(sa.Float)
-
+    filter = sa.Column(sa.String)  # TODO Enum?
 
     source_id = sa.Column(sa.ForeignKey('sources.id', ondelete='CASCADE'),
                           nullable=True, index=True)
