@@ -8,9 +8,10 @@ from skyportal.handlers import (SourceHandler, CommentHandler, GroupHandler,
                                 GroupUserHandler, PlotPhotometryHandler,
                                 PlotSpectroscopyHandler, ProfileHandler,
                                 BecomeUserHandler, LogoutHandler,
-                                PhotometryHandler, TokenHandler)
+                                PhotometryHandler, TokenHandler, UserInfoHandler,
+                                FitHandler)
 from skyportal import models, model_util
-
+from sqlalchemy.exc import ProgrammingError
 
 def make_app(cfg, baselayer_handlers, baselayer_settings):
     """Create and return a `tornado.web.Application` object with specified
@@ -47,6 +48,8 @@ def make_app(cfg, baselayer_handlers, baselayer_settings):
         (r'/api/tokens(/.*)?', TokenHandler),
         (r'/become_user(/.*)?', BecomeUserHandler),
         (r'/logout', LogoutHandler),
+        (r'/api/user(/.*)?', UserInfoHandler),
+        (r'/api/fit', FitHandler),
 
         # User-facing pages
         (r'/.*', MainPageHandler)  # Route all frontend pages, such as
@@ -62,6 +65,14 @@ def make_app(cfg, baselayer_handlers, baselayer_settings):
     models.init_db(**cfg['database'])
     model_util.create_tables()
     model_util.setup_permissions()
+
+    # create indexes and users if necessary
+    exists = models.DBSession().execute('SELECT to_regclass(\'public.namenum\')').fetchall()
+
+    if exists[0][0] is None:
+        model_util.create_indexes()
+        model_util.create_groups_and_users()
+
     app.cfg = cfg
 
     return app

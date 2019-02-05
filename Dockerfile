@@ -6,7 +6,7 @@ RUN apt-get update && \
     apt-get update && \
     apt-get -y upgrade && \
     apt-get install -y python3.6 python3.6-venv python3.6-dev \
-                       libpq-dev supervisor \
+                       libpq-dev supervisor openssh-server \
                        git nginx nodejs postgresql-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
@@ -32,16 +32,18 @@ RUN bash -c "\
 RUN bash -c "\
     \
     (make -f baselayer/Makefile bundle || make -c baselayer bundle) && \
-    rm -rf node_modules && \
     \
     chown -R skyportal.skyportal /skyportal_env && \
     chown -R skyportal.skyportal /skyportal && \
     \
     cp docker.yaml config.yaml"
 
-USER skyportal
+RUN bash -c "\
+    source /skyportal_env/bin/activate && \
+    cd / && git clone https://github.com/dannygoldstein/sncosmo.git && \
+    cd sncosmo && python setup.py install && cd - && rm -rf sncosmo"
 
-EXPOSE 5000
+EXPOSE 5000 5001
 
 CMD bash -c "source /skyportal_env/bin/activate && \
              (make log &) && \

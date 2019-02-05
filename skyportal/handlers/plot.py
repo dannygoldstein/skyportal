@@ -23,7 +23,8 @@ class PlotSpectroscopyHandler(BaseHandler):
     def get(self, source_id):
         docs_json, render_items, custom_model_js = plot.spectroscopy_plot(source_id)
         if docs_json is None:
-            self.error(f"Could not generate plot for source {source_id}")
+            #self.error(f"Could not generate plot for source {source_id}")
+            self.success()
         else:
             self.success({'docs_json': docs_json, 'render_items': render_items,
                           'custom_model_js': custom_model_js,

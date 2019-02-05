@@ -5,14 +5,20 @@ from bokeh.core.json_encoder import serialize_json
 from bokeh.core.properties import List, String
 from bokeh.document import Document
 from bokeh.layouts import row, column
-from bokeh.models import CustomJS, DatetimeTickFormatter, HoverTool, Range1d
-from bokeh.models.widgets import CheckboxGroup, TextInput
+from bokeh.models import CustomJS, DatetimeTickFormatter, HoverTool, Range1d, Slider, Button
+from bokeh.models.widgets import CheckboxGroup, TextInput, Panel, Tabs
 from bokeh.palettes import viridis
 from bokeh.plotting import figure, ColumnDataSource
 from bokeh.util.compiler import bundle_all_models
 from bokeh.util.serialization import make_id
+from bokeh.models.widgets import Toggle
 
-from skyportal.models import (DBSession, Source, Photometry,
+import os
+
+from sncosmo.photdata import PhotometricData
+from astropy.table import Table
+
+from skyportal.models import (DBSession, Source, ForcedPhotometry,
                               Instrument, Telescope)
 
 
@@ -145,6 +151,13 @@ def _plot_to_json(plot):
     return docs_json, render_items, custom_model_js
 
 
+tooltip_format = [('mjd', '@mjd'), ('flux', '@flux'), ('filter', '@filter'), ('fluxerr', '@fluxerr'),
+                  ('mag', '@mag'), ('magerr', '@magerr'), ('lim_mag', '@lim_mag'),
+                  ('new_img', '<img src="@new_img" height=61 width=61 alt="" style="float: left; margin: 0px 15px 15px 0px;" border="2">'),
+                  ('sub_img', '<img src="@sub_img" height=61 width=61 alt="" style="float: left; margin: 0px 15px 15px 0px;" border="2">')]
+
+download_columns = ['mjd', 'flux', 'fluxerr', 'filter', 'mag', 'magerr', 'lim_mag', 'zp', 'zpsys']
+
 # TODO make async so that thread isn't blocked
 def photometry_plot(source_id):
     """Create scatter plot of photometry for source.
@@ -159,53 +172,124 @@ def photometry_plot(source_id):
     (str, str)
         Returns (docs_json, render_items) json for the desired plot.
     """
-    color_map = {'ipr': 'yellow', 'rpr': 'red', 'g': 'green'}
+    color_map = {'ipr': 'yellow', 'rpr': 'red', 'g': 'green', 'r': 'red', 'i': 'orange'}
 
-    data = pd.read_sql(DBSession()
-                       .query(Photometry, Telescope.nickname.label('telescope'))
-                       .join(Instrument).join(Telescope)
-                       .filter(Photometry.source_id == source_id)
-                       .statement, DBSession().bind)
+    qobj = DBSession().query(ForcedPhotometry, Instrument.name.label('instrument')) \
+        .join(Instrument).join(Telescope) \
+        .filter(ForcedPhotometry.source_id == source_id)
+    data = pd.read_sql(qobj.statement, DBSession().bind)
+
     if data.empty:
         return None, None, None
 
-    for col in ['mag', 'e_mag', 'lim_mag']:
-        # TODO remove magic number; where can this logic live?
-        data.loc[np.abs(data[col]) > 90, col] = np.nan
+    data['new_img'] = ''
+    data['sub_img'] = ''
+
+    objects = qobj.all()
+    for object, (i, ro) in zip(objects, data.iterrows()):
+        object = object[0]
+        thumbs = object.forcethumbs
+        for thumb in thumbs:
+            if thumb.type == 'sub':
+                data.ix[i, 'sub_img'] = thumb.public_url
+            elif thumb.type == 'new':
+                data.ix[i, 'new_img'] = thumb.public_url
+
     data['color'] = [color_map.get(f, 'black') for f in data['filter']]
-    data['label'] = [f'{t} {f}-band'
-                     for t, f in zip(data['telescope'], data['filter'])]
-    data['observed'] = ~np.isnan(data.mag)
-    split = data.groupby(('label', 'observed'))
+    data['label'] = [f'{i} {f}-band' for i, f in zip(data['instrument'], data['filter'])]
+    data['filter'] = ['ztf' + f for f in data['filter']]
+
+    # normalize everything to a common zeropoint
+    photdata = PhotometricData(Table.from_pandas(data[['mjd', 'filter', 'flux', 'fluxerr', 'zp', 'zpsys', 'lim_mag']]))
+    normalized = photdata.normalized(zp=25., zpsys='ab')
+
+    data['flux'] = normalized.flux
+    data['fluxerr'] = normalized.fluxerr
+    data['zp'] = 25.
+    data['alpha'] = 1.
+
+    # calculate the magnitudes
+    obsind = data['flux'] / data['fluxerr'] >= 5
+    data.ix[~obsind, 'mag'] = None
+    data.ix[obsind, 'mag'] = -2.5 * np.log10(data[obsind]['flux']) + 25.
+    data.ix[~obsind, 'magerr'] = None
+    data.ix[obsind, 'magerr'] = np.abs(-2.5 * data[obsind]['fluxerr'] / data[obsind]['flux'] / np.log(10))
+    data['obs'] = obsind
+
+    split = data.groupby('label', sort=False)
+
+    # show middle 98% of data
+    finite = np.isfinite(data['flux'])
+    fdata = data[finite]
+    lower = np.percentile(fdata['flux'], 2.)
+    upper = np.percentile(fdata['flux'], 98.)
+
+    lower -= np.abs(lower) * 0.1
+    upper += np.abs(upper) * 0.1
 
     plot = figure(
         plot_width=600,
         plot_height=300,
         active_drag='box_zoom',
         tools='box_zoom,wheel_zoom,pan,reset',
-        y_range=(np.nanmax(data['mag']) + 0.1,
-                 np.nanmin(data['mag']) - 0.1)
+        y_range=(lower, upper)
     )
-    model_dict = {}
-    for i, ((label, is_obs), df) in enumerate(split):
-        key = ("" if is_obs else "un") + 'obs' + str(i // 2)
-        model_dict[key] = plot.scatter(
-            x='observed_at', y='mag' if is_obs else 'lim_mag',
-            color='color',
-            marker='circle' if is_obs else 'inverted_triangle',
-            fill_color='color' if is_obs else 'white',
-            source=ColumnDataSource(df)
-        )
-    plot.xaxis.axis_label = 'Observation Date'
-    plot.xaxis.formatter = DatetimeTickFormatter(hours=['%D'], days=['%D'],
-                                                 months=['%D'], years=['%D'])
-    plot.toolbar.logo = None
 
-    hover = HoverTool(tooltips=[('observed_at', '@observed_at{%D}'), ('mag', '@mag'),
-                                ('lim_mag', '@lim_mag'),
-                                ('filter', '@filter')],
-                      formatters={'observed_at': 'datetime'})
-    plot.add_tools(hover)
+    imhover = HoverTool(tooltips=tooltip_format)
+    plot.add_tools(imhover)
+
+    model_dict = {}
+
+    for i, (label, df) in enumerate(split):
+        key = f'obs{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='flux',
+            color='color',
+            marker='circle',
+            fill_color='color',
+            alpha='alpha',
+            source=ColumnDataSource(df),
+        )
+
+        imhover.renderers.append(model_dict[key])
+
+        key = f'bin{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='flux',
+            color='color',
+            marker='circle',
+            fill_color='color',
+            source=ColumnDataSource(data=dict(mjd=[], flux=[], fluxerr=[],
+                                              filter=[], color=[], lim_mag=[],
+                                              mag=[], magerr=[]))
+        )
+
+        imhover.renderers.append(model_dict[key])
+
+        key = 'obserr' + str(i)
+        y_err_x = []
+        y_err_y = []
+
+        for d, ro in df.iterrows():
+            px = ro['mjd']
+            py = ro['flux']
+            err = ro['fluxerr']
+
+            y_err_x.append((px, px))
+            y_err_y.append((py - err, py + err))
+
+        model_dict[key] = plot.multi_line(xs='xs', ys='ys', color='color', alpha='alpha',
+                                          source=ColumnDataSource(data=dict(xs=y_err_x, ys=y_err_y,
+                                                                  color=df['color'],
+                                                                  alpha=[1.] * len(df))))
+
+        key = f'binerr{i}'
+        model_dict[key] = plot.multi_line(xs='xs', ys='ys', color='color',
+                                          source=ColumnDataSource(data=dict(xs=[], ys=[], color=[])))
+
+    plot.xaxis.axis_label = 'MJD'
+    plot.yaxis.axis_label = 'Flux (AB Zeropoint = 25.)'
+    plot.toolbar.logo = None
 
     toggle = CheckboxWithLegendGroup(
         labels=list(data.label.unique()),
@@ -215,15 +299,154 @@ def photometry_plot(source_id):
     # TODO replace `eval` with Namespaces
     # https://github.com/bokeh/bokeh/pull/6340
     toggle.callback = CustomJS(args={'toggle': toggle, **model_dict},
-                               code="""
-        for (let i = 0; i < toggle.labels.length; i++) {
-            eval("obs" + i).visible = (toggle.active.includes(i))
-            eval("unobs" + i).visible = (toggle.active.includes(i));
-        }
-    """)
+                               code=open(os.path.join(os.path.dirname(__file__), 'plotjs', 'togglef.js')).read())
+
+    slider = Slider(start=0., end=15., value=0., step=1., title='binsize (days)')
+
+    callback = CustomJS(args={'slider': slider, 'toggle': toggle, **model_dict},
+                        code=open(os.path.join(os.path.dirname(__file__), 'plotjs', 'stackf.js')).read())
+
+    slider.js_on_change('value', callback)
+
+    button = Button(label="Export Bold Light Curve to CSV")
+    button.callback = CustomJS(args={'slider': slider, 'toggle': toggle, **model_dict},
+                               code=open(os.path.join(os.path.dirname(__file__), 'plotjs',
+                                                      "download.js")).read().replace('objname', source_id))
+
+
+    toplay = row(slider, button)
+    layout = row(plot, toggle)
+    layout = column(toplay, layout)
+
+    p1 = Panel(child=layout, title='flux')
+
+    # now make the mag light curve
+    ymax = 1.1 * data['lim_mag']
+    ymin = 0.9 * data['lim_mag']
+
+    if len(data['obs']) > 0:
+        ymax[data['obs']] = (data['mag'] + data['magerr']) * 1.1
+        ymin[data['obs']] = (data['mag'] - data['magerr']) * 0.9
+
+    plot = figure(
+        plot_width=600,
+        plot_height=300,
+        active_drag='box_zoom',
+        tools='box_zoom,wheel_zoom,pan,reset',
+        y_range=(np.nanmax(ymax), np.nanmin(ymin))
+    )
+
+    imhover = HoverTool(tooltips=tooltip_format)
+    plot.add_tools(imhover)
+    plot.add_tools(imhover)
+
+    model_dict = {}
+
+    for i, (label, df) in enumerate(split):
+
+        key = f'obs{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='mag',
+            color='color',
+            marker='circle',
+            fill_color='color',
+            alpha='alpha',
+            source=ColumnDataSource(df[df['obs']])
+        )
+
+        imhover.renderers.append(model_dict[key])
+
+        key = f'unobs{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='lim_mag',
+            color='color',
+            marker='inverted_triangle',
+            fill_color='white',
+            line_color='color',
+            alpha='alpha',
+            source=ColumnDataSource(df[~df['obs']])
+        )
+
+        imhover.renderers.append(model_dict[key])
+
+        key = f'bin{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='mag',
+            color='color',
+            marker='circle',
+            fill_color='color',
+            source=ColumnDataSource(data=dict(mjd=[], flux=[], fluxerr=[],
+                                              filter=[], color=[], lim_mag=[],
+                                              mag=[], magerr=[]))
+        )
+
+        imhover.renderers.append(model_dict[key])
+
+        key = 'obserr' + str(i)
+        y_err_x = []
+        y_err_y = []
+
+        for d, ro in df[df['obs']].iterrows():
+            px = ro['mjd']
+            py = ro['mag']
+            err = ro['magerr']
+
+            y_err_x.append((px, px))
+            y_err_y.append((py - err, py + err))
+
+        model_dict[key] = plot.multi_line(xs='xs', ys='ys', color='color', alpha='alpha',
+                                          source=ColumnDataSource(data=dict(xs=y_err_x, ys=y_err_y,
+                                                                  color=df[df['obs']]['color'],
+                                                                  alpha=[1.] * len(df[df['obs']]))))
+
+        key = f'binerr{i}'
+        model_dict[key] = plot.multi_line(xs='xs', ys='ys', color='color',
+                                          source=ColumnDataSource(data=dict(xs=[], ys=[], color=[])))
+
+        key = f'unobsbin{i}'
+        model_dict[key] = plot.scatter(
+            x='mjd', y='lim_mag',
+            color='color',
+            marker='inverted_triangle',
+            fill_color='white',
+            line_color='color',
+            source=ColumnDataSource(data=dict(mjd=[], flux=[], fluxerr=[],
+                                              filter=[], color=[], lim_mag=[],
+                                              mag=[], magerr=[]))
+        )
+        imhover.renderers.append(model_dict[key])
+
+        key = f'all{i}'
+        model_dict[key] = ColumnDataSource(df)
+
+
+    plot.xaxis.axis_label = 'MJD'
+    plot.yaxis.axis_label = 'mag'
+    plot.toolbar.logo = None
+
+    toggle = CheckboxWithLegendGroup(
+        labels=list(data.label.unique()),
+        active=list(range(len(data.label.unique()))),
+        colors=list(data.color.unique()))
+
+    # TODO replace `eval` with Namespaces
+    # https://github.com/bokeh/bokeh/pull/6340
+    toggle.callback = CustomJS(args={'toggle': toggle, **model_dict},
+                               code=open(os.path.join(os.path.dirname(__file__), 'plotjs', 'togglem.js')).read())
+
+    slider = Slider(start=0., end=15., value=0., step=1., title='binsize (days)')
+
+    callback = CustomJS(args={'slider': slider, 'toggle': toggle, **model_dict},
+                        code=open(os.path.join(os.path.dirname(__file__), 'plotjs', 'stackm.js')).read())
+    slider.js_on_change('value', callback)
 
     layout = row(plot, toggle)
-    return _plot_to_json(layout)
+    layout = column(slider, layout)
+
+    p2 = Panel(child=layout, title='mag')
+
+    tabs = Tabs(tabs=[p1, p2])
+    return _plot_to_json(tabs)
 
 
 # TODO make async so that thread isn't blocked
@@ -231,6 +454,7 @@ def spectroscopy_plot(source_id):
     """TODO normalization? should this be handled at data ingestion or plot-time?"""
     source = Source.query.get(source_id)
     spectra = Source.query.get(source_id).spectra
+
     if len(spectra) == 0:
         return None, None, None
 
