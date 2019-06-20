@@ -18,3 +18,6 @@ apispec
 marshmallow==3.0.0rc5
 marshmallow-sqlalchemy
 marshmallow-enum
+sncosmo>=2.0.0
+
+

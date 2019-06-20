@@ -250,7 +250,7 @@ class Photometry(Base):
     fluxerr = sa.Column(sa.Float)
 
     zp = sa.Column(sa.Float)
-    zpsys = sa.Column(sa.Text) # should be enum 
+    zpsys = sa.Column(sa.Text) # should be enum
 
     lim_mag = sa.Column(sa.Float)
 
