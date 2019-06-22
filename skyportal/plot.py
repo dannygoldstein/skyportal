@@ -162,7 +162,8 @@ def photometry_plot(source_id):
     color_map = {'ipr': 'yellow', 'rpr': 'red', 'ztfg': 'green', 'ztfi': 'orange', 'ztfr': 'red'}
 
     data = pd.read_sql(DBSession()
-                       .query(Photometry, Telescope.nickname.label('telescope'))
+                       .query(Photometry, Telescope.nickname.label('telescope'),
+                              Instrument.name.label('instrument'))
                        .join(Instrument).join(Telescope)
                        .filter(Photometry.source_id == source_id)
                        .statement, DBSession().bind)
