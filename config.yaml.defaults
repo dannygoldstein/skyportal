@@ -9,11 +9,11 @@ app:
     factory: skyportal.app_server.make_app
 
 database:
-    database: skyportal
-    host: localhost
-    port: 5432
-    user: skyportal
-    password:
+    database: ztfimages
+    host: private.caltech.edu
+    port: 6666
+    user: decam_admin
+    password: 'q2uuG$2y9&#8yNUlMxqb'
 
 server:
     # From https://console.developers.google.com/
