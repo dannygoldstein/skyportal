@@ -174,6 +174,7 @@ def photometry_plot(source_id):
         if not data[col].empty and type(data[col][0]) == Arrow:
             data[col] = pd.Series([pd.Timestamp(el.isoformat()) for el in data[col]])
 
+    data['filter'] = [f.lower().replace('_', '') for f in data['filter']]
     data['color'] = [color_map.get(f, 'black') for f in data['filter']]
     data['label'] = [f'{i} {f}-band' for i, f in zip(data['instrument'], data['filter'])]
 
