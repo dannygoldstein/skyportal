@@ -147,10 +147,13 @@ class Source(Base):
     thumbnails = relationship('Thumbnail', back_populates='source',
                               secondary='photometry', cascade='all')
 
-    def add_linked_thumbnails(self):
+    def add_linked_thumbnails(self, commit=True):
 
         to_add = []
         thumbtypes = [t.type for t in self.thumbnails]
+
+        if len(self.photometry) == 0:
+            return
 
         if 'sdss' not in thumbtypes:
             sdss_thumb = Thumbnail(photometry=self.photometry[0],
@@ -171,7 +174,9 @@ class Source(Base):
             to_add.append(ls_thumb)
 
         DBSession().add_all(to_add)
-        DBSession().commit()
+
+        if commit:
+            DBSession().commit()
 
     def get_decals_url(self):
         return (f"http://legacysurvey.org//viewer/cutout.jpg?ra={self.ra}"
