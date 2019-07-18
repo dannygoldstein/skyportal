@@ -30,6 +30,10 @@ const SurveyLinkList = ({ ra, dec, id }) => {
   return (
     <div className={styles.SurveyLinkList}>
       <SurveyLink
+        name="GROWTH Marshal"
+        url={`http://skipper.caltech.edu:8080/cgi-bin/growth/cone_search.cgi?doit=yes&ra=${ra}&dec=${dec}+&radius=10`}
+      />    
+      <SurveyLink
         name="Gaia DR2"
         url={`http://vizier.u-strasbg.fr/viz-bin/VizieR?-source=I/345/gaia2&-out.add=_r&-out.add=2C_DEJ&-sort=_r&-to=&-out.max=20&-meta.ucd=2&-meta.foot=1&-c=${ra_hrs}+${dec_hrs}&-c.rs=10`}
       />
@@ -57,8 +61,8 @@ const SurveyLinkList = ({ ra, dec, id }) => {
         name="HEASARC"
       />
       <SurveyLink
-        name="DECam"
-        url={`http://legacysurvey.org/viewer?ra=${ra}s&dec=${dec}s&zoom=14&layer=decals-dr2`}
+        name="Legacy Surveys"
+        url={`http://legacysurvey.org/viewer?ra=${ra}&dec=${dec}&zoom=12&layer=dr8`}
       />
       <SurveyLink
         name="SkyView"
