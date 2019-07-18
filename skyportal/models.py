@@ -148,14 +148,34 @@ class Source(Base):
                               secondary='photometry', cascade='all')
 
     def add_linked_thumbnails(self):
-        sdss_thumb = Thumbnail(photometry=self.photometry[0],
-                               public_url=self.get_sdss_url(),
-                               type='sdss')
-        ps1_thumb = Thumbnail(photometry=self.photometry[0],
-                              public_url=self.get_panstarrs_url(),
-                              type='ps1')
-        DBSession().add_all([sdss_thumb, ps1_thumb])
+
+        to_add = []
+        thumbtypes = [t.type for t in self.thumbnails]
+
+        if 'sdss' not in thumbtypes:
+            sdss_thumb = Thumbnail(photometry=self.photometry[0],
+                                   public_url=self.get_sdss_url(),
+                                   type='sdss')
+            to_add.append(sdss_thumb)
+
+        if 'ps1' not in thumbtypes:
+            ps1_thumb = Thumbnail(photometry=self.photometry[0],
+                                  public_url=self.get_panstarrs_url(),
+                                  type='ps1')
+            to_add.append(ps1_thumb)
+
+        if 'lsdr8-model' not in thumbtypes:
+            ls_thumb = Thumbnail(photometry=self.photometry[0],
+                                 public_url=self.get_decals_url(),
+                                 type='lsdr8-model')
+            to_add.append(ls_thumb)
+
+        DBSession().add_all(to_add)
         DBSession().commit()
+
+    def get_decals_url(self):
+        return (f"http://legacysurvey.org//viewer/cutout.jpg?ra={self.ra}"
+                f"&dec={self.dec}&zoom=15&layer=dr8-model")
 
     def get_sdss_url(self):
         """Construct URL for public Sloan Digital Sky Survey (SDSS) cutout."""
@@ -335,7 +355,7 @@ class Spectrum(Base):
 class Thumbnail(Base):
     # TODO delete file after deleting row
     type = sa.Column(sa.Enum('new', 'ref', 'sub', 'sdss', 'ps1', "new_gz",
-                             'ref_gz', 'sub_gz',
+                             'ref_gz', 'sub_gz', 'lsdr8-model',
                              name='thumbnail_types', validate_strings=True))
     file_uri = sa.Column(sa.String(), nullable=True, index=False, unique=False)
     public_url = sa.Column(sa.String(), nullable=True, index=False, unique=False)
