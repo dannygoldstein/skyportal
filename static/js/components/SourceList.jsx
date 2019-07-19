@@ -4,6 +4,28 @@ import { Link } from 'react-router-dom';
 
 import SearchBox from '../containers/SearchBox';
 
+function compareValues(key, order='asc') {
+  return function(a, b) {
+    if(!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return 0;
+    let comparison = a[key].localeCompare(b[key]);
+
+    return (
+      (order == 'desc') ? (comparison * -1) : comparison
+    );
+  };
+}
+
+
+function getLatestCommentString(comment_list){
+    if (comment_list.length === 0){
+	return null;
+    } else {
+	let comment_list_copy = [...comment_list];
+	let sorted_clist = comment_list_copy.sort(compareValues('created_at', 'desc'));
+	let latest_comment = sorted_clist[0];
+	return `${latest_comment.author}: ${latest_comment.text}`;
+    }
+}
 
 const SourceList = ({ sources }) => (
   <div>
@@ -41,6 +63,9 @@ const SourceList = ({ sources }) => (
             <th>
               Name
             </th>
+	    <th>
+	      Latest comment
+	    </th>	    
             <th>
               RA
             </th>
@@ -89,6 +114,9 @@ const SourceList = ({ sources }) => (
                     {source.id}
                   </Link>
                 </td>
+		<td>
+		    {getLatestCommentString(source.comments)}
+		</td>
                 <td>{source.ra && Number(source.ra).toFixed(3)}</td>
                 <td>{source.dec && Number(source.dec.toFixed(4))}</td>
                 <td>{source.varstar.toString()}</td>
