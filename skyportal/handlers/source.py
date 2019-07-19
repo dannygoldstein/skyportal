@@ -67,7 +67,7 @@ class SourceHandler(BaseHandler):
             page = int(page_number)
             q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
-                    [g.id for g in self.current_user.groups])))).joinedload(Source.comments)
+                    [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments))
             all_matches = q.all()
             info['totalMatches'] = len(all_matches)
             info['sources'] = all_matches[
@@ -189,7 +189,7 @@ class FilterSourcesHandler(BaseHandler):
         info['pageNumber'] = page
         q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
-                    [g.id for g in self.current_user.groups]))))
+                    [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments))
 
         if data['sourceID']:
             q = q.filter(Source.id.contains(data['sourceID'].strip()))
