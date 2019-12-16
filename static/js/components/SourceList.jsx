@@ -107,7 +107,7 @@ const SourceList = ({ sources }) => (
         <tbody>
           {
             sources.latest && sources.latest.map((source, idx) => (
-              <tr key={source.id}>
+              <tr key={source.id} bgcolor={ source.score > 0 ? "#eb5244" : "#FFFFFF"}>
                 <td>{source.last_detected && String(source.last_detected).split(".")[0]}&nbsp;&nbsp;</td>
                 <td>
                   <Link to={`/source/${source.id}`}>
