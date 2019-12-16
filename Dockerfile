@@ -27,13 +27,14 @@ RUN bash -c "\
     source /skyportal_env/bin/activate && \
     \
     make -C baselayer paths && \
-    (make -f baselayer/Makefile baselayer dependencies || make -C baselayer dependencies)"
+    (make -f baselayer/Makefile baselayer dependencies || make -C baselayer dependencies) && \
+    git clone https://github.com/sncosmo/sncosmo.git && cd sncosmo && python setup.py install"
+
+
 
 RUN bash -c "\
     \
     (make -f baselayer/Makefile bundle || make -c baselayer bundle) && \
-    rm -rf node_modules && \
-    \
     chown -R skyportal.skyportal /skyportal_env && \
     chown -R skyportal.skyportal /skyportal && \
     \
