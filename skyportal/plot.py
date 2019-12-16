@@ -14,8 +14,11 @@ from bokeh.util.serialization import make_id
 from arrow.arrow import Arrow
 
 import os
-from skyportal.models import (DBSession, Source, Photometry,
-                              Instrument, Telescope)
+
+import db
+
+#from skyportal.models import (DBSession, Source, Photometry,
+#                              Instrument, Telescope)
 
 from sncosmo.photdata import PhotometricData
 from astropy.table import Table
@@ -161,12 +164,19 @@ def photometry_plot(source_id):
     """
     color_map = {'ipr': 'yellow', 'rpr': 'red', 'ztfg': 'green', 'ztfi': 'orange', 'ztfr': 'red'}
 
+    source = db.DBSession().query(db.models.Source).get(source_id)
+    data = source.light_curve().to_pandas()
+    data['telescope'] = 'P48'
+    data['instrument'] = 'ZTF Camera'
+
+    '''
     data = pd.read_sql(DBSession()
-                       .query(Photometry, Telescope.nickname.label('telescope'),
-                              Instrument.name.label('instrument'))
+                       .query(db.ForcedPhotometry
                        .join(Instrument).join(Telescope)
                        .filter(Photometry.source_id == source_id)
                        .statement, DBSession().bind)
+    '''
+    
     if data.empty:
         return None, None, None
 
