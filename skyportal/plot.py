@@ -17,6 +17,13 @@ import os
 
 import db
 
+from db import DBSession
+#from db.models import Source, Instrument, Telescope
+
+Source = db.models.Source
+Instrument = db.models.Instrument
+Telescope = db.models.Telescope
+
 #from skyportal.models import (DBSession, Source, Photometry,
 #                              Instrument, Telescope)
 

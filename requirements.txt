@@ -6,7 +6,7 @@ joblib>=0.11
 bokeh==0.12.9
 pytest-randomly==2.1.1
 factory-boy==2.11.1
-astropy==3.0.3
+astropy>=3.0.3
 aplpy==1.1.1
 avro-python3==1.8.2
 fastavro==0.21.7
@@ -14,10 +14,13 @@ tqdm==4.23.2
 matplotlib==2.1.0
 astroquery==0.3.8
 sqlalchemy-utils
-apispec
-marshmallow==3.0.0rc5
+apispec==2.0.0
+marshmallow>=3.0.0rc5
 marshmallow-sqlalchemy
 marshmallow-enum
-sncosmo>=2.0.0
-
-
+Cython
+sncosmo>=2.0
+photutils>=0.7.2
+boto3
+git+https://github.com/dmitryduev/kowalski.git
+fitsio
