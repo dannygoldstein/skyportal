@@ -178,9 +178,9 @@ class Source(Base):
         if commit:
             DBSession().commit()
 
-    def get_decals_url(self):
+    def get_decals_url(self, layer='dr8'):
         return (f"http://legacysurvey.org//viewer/cutout.jpg?ra={self.ra}"
-                f"&dec={self.dec}&zoom=15&layer=dr8-model")
+                f"&dec={self.dec}&zoom=15&layer={layer}")
 
     def get_sdss_url(self):
         """Construct URL for public Sloan Digital Sky Survey (SDSS) cutout."""
