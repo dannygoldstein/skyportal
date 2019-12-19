@@ -1,8 +1,10 @@
-import * as API from './API';
+import * as groupsActions from './ducks/groups';
+import * as profileActions from './ducks/profile';
+import * as sysInfoActions from './ducks/sysInfo';
+import * as dbInfoActions from './ducks/dbInfo';
 
-export const FETCH_SOURCES = 'skyportal/FETCH_SOURCES';
-export const FETCH_SOURCES_OK = 'skyportal/FETCH_SOURCES_OK';
 
+<<<<<<< HEAD
 export const REFRESH_SOURCE = 'skyportal/REFRESH_SOURCE';
 export const REFRESH_GROUP = 'skyportal/REFRESH_GROUP';
 
@@ -88,18 +90,17 @@ export function fetchSystemInfo() {
 }
 
 export function hydrate() {
+=======
+export default function hydrate() {
+>>>>>>> b460dcd20f63897e035a71523a691074c0e83402
   return (dispatch) => {
-    dispatch(fetchSystemInfo());
-    dispatch(fetchUserProfile());
-    dispatch(fetchGroups());
+    dispatch(sysInfoActions.fetchSystemInfo());
+    dispatch(dbInfoActions.fetchDBInfo());
+    dispatch(profileActions.fetchUserProfile());
+    dispatch(groupsActions.fetchGroups());
   };
 }
-
-export function rotateLogo() {
-  return {
-    type: ROTATE_LOGO
-  };
-}
+<<<<<<< HEAD
 
 export function addComment(form) {
   function fileReaderPromise(file) {
@@ -163,3 +164,5 @@ export function deleteToken(tokenID) {
 export function submitSourceFilterParams(formData) {
   return API.POST(`/api/sources/filter`, FETCH_SOURCES, formData);
 }
+=======
+>>>>>>> b460dcd20f63897e035a71523a691074c0e83402

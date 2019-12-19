@@ -7,7 +7,7 @@ from marshmallow.exceptions import ValidationError
 from baselayer.app.access import permissions, auth_or_token
 from .base import BaseHandler
 from ..models import (DBSession, Comment, Instrument, Photometry, Source,
-                      Thumbnail, GroupSource, Token, User)
+                      Thumbnail, GroupSource, Token, User, Group)
 
 
 SOURCES_PER_PAGE = 100
@@ -37,16 +37,10 @@ class SourceHandler(BaseHandler):
                   schema: Error
         multiple:
           description: Retrieve all sources
-          parameters:
-            - in: query
-              name: page
-              schema:
-                type: integer
-              description: Queries are limited to 100 per page. This selects the page to download.
           responses:
             200:
               content:
-               application/json:
+                application/json:
                   schema: ArrayOfSources
             400:
               content:
@@ -67,11 +61,18 @@ class SourceHandler(BaseHandler):
             page = int(page_number)
             q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
+<<<<<<< HEAD
                     [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments)).order_by(Source.score.desc())
             all_matches = q.all()
             info['totalMatches'] = len(all_matches)
             info['sources'] = all_matches[
                 ((page - 1) * SOURCES_PER_PAGE):(page * SOURCES_PER_PAGE)]
+=======
+                    [g.id for g in self.current_user.groups]))))
+            info['totalMatches'] = q.count()
+            info['sources'] = q.limit(SOURCES_PER_PAGE).offset(
+                (page - 1) * SOURCES_PER_PAGE).all()
+>>>>>>> b460dcd20f63897e035a71523a691074c0e83402
             info['pageNumber'] = page
             info['sourceNumberingStart'] = (page - 1) * SOURCES_PER_PAGE + 1
             info['sourceNumberingEnd'] = min(info['totalMatches'],
@@ -93,11 +94,11 @@ class SourceHandler(BaseHandler):
             return self.error(f"Could not load source {source_id}",
                               data={"source_id": source_id_or_page_num})
 
-    @permissions(['Manage sources'])
+    @permissions(['Upload data'])
     def post(self):
         """
         ---
-        description: Upload a source
+        description: Upload a source. If group_ids is not specified, the user or token's groups will be used.
         parameters:
           - in: path
             name: source
@@ -112,17 +113,41 @@ class SourceHandler(BaseHandler):
                     - type: object
                       properties:
                         id:
-                          type: integer
+                          type: string
                           description: New source ID
         """
         data = self.get_json()
-
-        s = Source(ra=data['sourceRA'], dec=data['sourceDec'],
-                   redshift=data.get('redshift'))
-        DBSession().add(s)
+        schema = Source.__schema__()
+        user_group_ids = [g.id for g in self.current_user.groups]
+        if not user_group_ids:
+            return self.error("You must belong to one or more groups before "
+                              "you can add sources.")
+        try:
+            group_ids = [id for id in data.pop('group_ids') if id in user_group_ids]
+        except KeyError:
+            group_ids = user_group_ids
+        if not group_ids:
+            return self.error("Invalid group_ids field. Please specify at least "
+                              "one valid group ID that you belong to.")
+        try:
+            s = schema.load(data)
+        except ValidationError as e:
+            return self.error('Invalid/missing parameters: '
+                              f'{e.normalized_messages()}')
+        groups = Group.query.filter(Group.id.in_(group_ids)).all()
+        if not groups:
+            return self.error("Invalid group_ids field. Please specify at least "
+                              "one valid group ID that you belong to.")
+        s.groups = groups
+        DBSession.add(s)
         DBSession().commit()
 
+<<<<<<< HEAD
         return self.success(data={"id": s.id}, action='skyportal/FETCH_SOURCES')
+=======
+        self.push_all(action='skyportal/FETCH_SOURCES')
+        return self.success(data={"id": s.id})
+>>>>>>> b460dcd20f63897e035a71523a691074c0e83402
 
     @permissions(['Manage sources'])
     def put(self, source_id):
@@ -143,6 +168,7 @@ class SourceHandler(BaseHandler):
               application/json:
                 schema: Error
         """
+        s = Source.get_if_owned_by(source_id, self.current_user)
         data = self.get_json()
         data['id'] = source_id
 
@@ -154,8 +180,12 @@ class SourceHandler(BaseHandler):
                               f'{e.normalized_messages()}')
         DBSession().commit()
 
+<<<<<<< HEAD
         return self.success(action='skyportal/REFRESH_SOURCE',
                             payload={'source_id': source_id})
+=======
+        return self.success(action='skyportal/FETCH_SOURCES')
+>>>>>>> b460dcd20f63897e035a71523a691074c0e83402
 
     @permissions(['Manage sources'])
     def delete(self, source_id):
@@ -173,8 +203,8 @@ class SourceHandler(BaseHandler):
               application/json:
                 schema: Success
         """
-        s = Source.query.get(source_id)
-        DBSession().delete(s)
+        s = Source.get_if_owned_by(source_id, self.current_user)
+        DBSession.query(Source).filter(Source.id == source_id).delete()
         DBSession().commit()
 
         return self.success(action='skyportal/FETCH_SOURCES')
@@ -185,7 +215,12 @@ class FilterSourcesHandler(BaseHandler):
     def post(self):
         data = self.get_json()
         info = {}
-        page = int(data.get('pageNumber', 1))
+        if 'pageNumber' in data:
+            page = int(data['pageNumber'])
+            already_counted = True
+        else:
+            page = 1
+            already_counted = False
         info['pageNumber'] = page
         q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
@@ -213,10 +248,13 @@ class FilterSourcesHandler(BaseHandler):
         if data['hasTNSname']:
             q = q.filter(Source.tns_name.isnot(None))
 
-        all_matches = list(q)
-        info['totalMatches'] = len(all_matches)
-        info['sources'] = all_matches[
-            ((page - 1) * SOURCES_PER_PAGE):(page * SOURCES_PER_PAGE)]
+        if already_counted:
+            info['totalMatches'] = int(data['totalMatches'])
+        else:
+            info['totalMatches'] = q.count()
+        info['sources'] = q.limit(SOURCES_PER_PAGE).offset(
+            (page - 1) * SOURCES_PER_PAGE).all()
+
         info['lastPage'] = info['totalMatches'] <= page * SOURCES_PER_PAGE
         info['sourceNumberingStart'] = (page - 1) * SOURCES_PER_PAGE + 1
         info['sourceNumberingEnd'] = min(info['totalMatches'],
@@ -225,3 +263,33 @@ class FilterSourcesHandler(BaseHandler):
             info['sourceNumberingStart'] = 0
 
         return self.success(data=info)
+
+
+class SourcePhotometryHandler(BaseHandler):
+    @auth_or_token
+    def get(self, source_id):
+        """
+        ---
+        description: Retrieve a source's photometry
+        parameters:
+        - in: path
+          name: source_id
+          required: true
+          schema:
+            type: string
+        responses:
+          200:
+            content:
+              application/json:
+                schema: ArrayOfPhotometrys
+          400:
+            content:
+              application/json:
+                schema: Error
+        """
+        source = Source.query.get(source_id)
+        if not source:
+            return self.error('Invalid source ID.')
+        if not set(source.groups).intersection(set(self.current_user.groups)):
+            return self.error('Inadequate permissions.')
+        return self.success(data={'photometry': source.photometry})
