@@ -15,17 +15,8 @@ from arrow.arrow import Arrow
 
 import os
 
-import db
-
-from db import DBSession
-#from db.models import Source, Instrument, Telescope
-
-Source = db.models.Source
-Instrument = db.models.Instrument
-Telescope = db.models.Telescope
-
-#from skyportal.models import (DBSession, Source, Photometry,
-#                              Instrument, Telescope)
+from skyportal.models import (DBSession, Source, Photometry,
+                              Instrument, Telescope)
 
 from sncosmo.photdata import PhotometricData
 from astropy.table import Table
@@ -171,19 +162,36 @@ def photometry_plot(source_id):
     """
     color_map = {'ipr': 'yellow', 'rpr': 'red', 'ztfg': 'green', 'ztfi': 'orange', 'ztfr': 'red'}
 
-    source = db.DBSession().query(db.models.Source).get(source_id)
-    data = source.light_curve().to_pandas()
+    query = """SELECT scienceimages.obsjd - %(obsjd_1)s AS obsmjd, scienceimages.filtercode AS 
+               scienceimages_filtercode, calibratableimages.header -> %(header_1)s AS magzp, 
+               objectswithflux.flux AS objectswithflux_flux, objectswithflux.fluxerr AS objectswithflux_fluxerr, 
+               forcedphotometry.flags AS forcedphotometry_flags, scienceimages.maglimit AS scienceimages_maglimit, 
+               calibratableimages.header -> %(header_2)s AS apcor FROM objectswithflux JOIN forcedphotometry ON 
+               forcedphotometry.id = objectswithflux.id JOIN (ztffiles JOIN calibratableimages ON 
+               calibratableimages.id = ztffiles.id JOIN calibratedimages ON calibratedimages.id = calibratableimages.id 
+               JOIN singleepochsubtractions ON singleepochsubtractions.id = calibratedimages.id) ON 
+               objectswithflux.image_id = singleepochsubtractions.id JOIN scienceimages ON 
+               singleepochsubtractions.target_image_id = scienceimages.id WHERE objectswithflux.source_id = %(source_id_1)s"""
+
+    params = {'obsjd_1': '2400000.5',
+              'header_1': 'MAGZP',
+              'header_2': 'APCOR4',
+              'source_id_1': source_id}
+    
+    raw = pd.read_sql(query, DBSession().get_bind(), params=params)
+    data = pd.DataFrame([{
+        'mjd': r['obsmjd'],
+        'filter': 'ztf' + r['scienceimages_filtercode'][-1],
+        'zpsys': 'ab',
+        'zp': r['magzp'] + r['apcor'],
+        'lim_mag': r['scienceimages_maglimit'],
+        'flux': r['objectswithflux_flux'],
+        'fluxerr': r['objectswithflux_fluxerr']
+        } for _, r in raw.iterrows()])
+    
     data['telescope'] = 'P48'
     data['instrument'] = 'ZTF Camera'
 
-    '''
-    data = pd.read_sql(DBSession()
-                       .query(db.ForcedPhotometry
-                       .join(Instrument).join(Telescope)
-                       .filter(Photometry.source_id == source_id)
-                       .statement, DBSession().bind)
-    '''
-    
     if data.empty:
         return None, None, None
 

@@ -61,18 +61,10 @@ class SourceHandler(BaseHandler):
             page = int(page_number)
             q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
-<<<<<<< HEAD
-                    [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments)).order_by(Source.score.desc())
-            all_matches = q.all()
-            info['totalMatches'] = len(all_matches)
-            info['sources'] = all_matches[
-                ((page - 1) * SOURCES_PER_PAGE):(page * SOURCES_PER_PAGE)]
-=======
                     [g.id for g in self.current_user.groups]))))
             info['totalMatches'] = q.count()
             info['sources'] = q.limit(SOURCES_PER_PAGE).offset(
                 (page - 1) * SOURCES_PER_PAGE).all()
->>>>>>> b460dcd20f63897e035a71523a691074c0e83402
             info['pageNumber'] = page
             info['sourceNumberingStart'] = (page - 1) * SOURCES_PER_PAGE + 1
             info['sourceNumberingEnd'] = min(info['totalMatches'],
@@ -142,12 +134,8 @@ class SourceHandler(BaseHandler):
         DBSession.add(s)
         DBSession().commit()
 
-<<<<<<< HEAD
-        return self.success(data={"id": s.id}, action='skyportal/FETCH_SOURCES')
-=======
         self.push_all(action='skyportal/FETCH_SOURCES')
         return self.success(data={"id": s.id})
->>>>>>> b460dcd20f63897e035a71523a691074c0e83402
 
     @permissions(['Manage sources'])
     def put(self, source_id):
@@ -180,12 +168,7 @@ class SourceHandler(BaseHandler):
                               f'{e.normalized_messages()}')
         DBSession().commit()
 
-<<<<<<< HEAD
-        return self.success(action='skyportal/REFRESH_SOURCE',
-                            payload={'source_id': source_id})
-=======
         return self.success(action='skyportal/FETCH_SOURCES')
->>>>>>> b460dcd20f63897e035a71523a691074c0e83402
 
     @permissions(['Manage sources'])
     def delete(self, source_id):

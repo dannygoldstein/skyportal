@@ -14,10 +14,6 @@ import Responsive from "./Responsive";
 import FoldBox from "./FoldBox";
 
 
-<<<<<<< HEAD
-const Source = ({ ra, dec, redshift, thumbnails, id, score, updateScore }) => {
-  if (id === undefined) {
-=======
 const Source = ({ route }) => {
   const dispatch = useDispatch();
   const source = useSelector((state) => state.source);
@@ -31,7 +27,6 @@ const Source = ({ route }) => {
     }
   }, []);
   if (source.loadError) {
->>>>>>> b460dcd20f63897e035a71523a691074c0e83402
     return (
       <div>
         Could not retrieve requested source
@@ -117,15 +112,6 @@ const Source = ({ route }) => {
         </div>
 
         <div className={styles.rightColumn}>
-          <div>
-            <input
-              type="checkbox"
-              id="highPriorityCheckbox"
-              checked={Boolean(score)}
-              onClick={(event) => updateScore(id, +event.target.checked)}
-            />
-            &nbsp;High Priority
-          </div>
 
           <Responsive
             element={FoldBox}
@@ -144,23 +130,9 @@ const Source = ({ route }) => {
 };
 
 Source.propTypes = {
-<<<<<<< HEAD
-  ra: PropTypes.number.isRequired,
-  dec: PropTypes.number.isRequired,
-  redshift: PropTypes.number,
-  id: PropTypes.string.isRequired,
-  thumbnails: PropTypes.arrayOf(PropTypes.object).isRequired,
-  score: PropTypes.number.isRequired,
-  updateScore: PropTypes.func.isRequired
-};
-
-Source.defaultProps = {
-  redshift: null
-=======
   route: PropTypes.shape({
     id: PropTypes.string
   }).isRequired
->>>>>>> b460dcd20f63897e035a71523a691074c0e83402
 };
 
 export default Source;
