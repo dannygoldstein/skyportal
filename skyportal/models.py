@@ -154,15 +154,14 @@ class Source(Base):
                               secondary='photometry',
                               cascade='save-update, merge, refresh-expire, expunge')
 
-    def add_linked_thumbnails(self):
+    def return_linked_thumbnails(self):
         sdss_thumb = Thumbnail(photometry=self.photometry[0],
                                public_url=self.sdss_url,
                                type='sdss')
         dr8_thumb = Thumbnail(photometry=self.photometry[0],
                               public_url=self.desi_dr8_url,
                               type='dr8')
-        DBSession().add_all([sdss_thumb, dr8_thumb])
-        DBSession().commit()
+        return [sdss_thumb, dr8_thumb]
 
     @property
     def sdss_url(self):
