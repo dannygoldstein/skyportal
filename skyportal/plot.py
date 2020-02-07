@@ -313,8 +313,15 @@ def photometry_plot(source_id):
 
     slider.js_on_change('value', callback)
 
+    button = Button(label="Export Bold Light Curve to CSV")
+    button.callback = CustomJS(args={'slider': slider, 'toggle': toggle, **model_dict},
+                               code=open(os.path.join(os.path.dirname(__file__), 'plotjs',
+                                                      "download.js")).read().replace('objname', source_id))
+
+
+    toplay = row(slider, button)
     layout = row(plot, toggle)
-    layout = column(slider, layout)
+    layout = column(toplay, layout)
 
     p1 = Panel(child=layout, title='flux')
 
@@ -437,6 +444,7 @@ def photometry_plot(source_id):
     callback = CustomJS(args={'slider': slider, 'toggle': toggle, **model_dict},
                         code=open(os.path.join(os.path.dirname(__file__), 'plotjs', 'stackm.js')).read())
     slider.js_on_change('value', callback)
+    
 
     layout = row(plot, toggle)
     layout = column(slider, layout)
