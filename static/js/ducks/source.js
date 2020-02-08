@@ -6,6 +6,9 @@ export const FETCH_LOADED_SOURCE = 'skyportal/FETCH_LOADED_SOURCE';
 export const FETCH_LOADED_SOURCE_OK = 'skyportal/FETCH_LOADED_SOURCE_OK';
 export const FETCH_LOADED_SOURCE_FAIL = 'skyportal/FETCH_LOADED_SOURCE_FAIL';
 
+export const UPDATE_SCORE = 'skyportal/UPDATE_SCORE';
+export const UPDATE_SCORE_OK = 'skyportal/UPDATE_SCORE_OK';
+
 export const ADD_COMMENT = 'skyportal/ADD_COMMENT';
 export const ADD_COMMENT_OK = 'skyportal/ADD_COMMENT_OK';
 
@@ -41,6 +44,10 @@ export function deleteComment(comment_id) {
 
 export function fetchSource(id) {
   return API.GET(`/api/sources/${id}`, FETCH_LOADED_SOURCE);
+}
+
+export function updateScore({ source_id, value }) {
+  return API.PUT(`/api/sources/${source_id}`, UPDATE_SCORE, { score: value });
 }
 
 // Reducer for currently displayed source

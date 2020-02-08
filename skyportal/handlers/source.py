@@ -61,7 +61,11 @@ class SourceHandler(BaseHandler):
             page = int(page_number)
             q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
-                    [g.id for g in self.current_user.groups]))))
+                    [g.id for g in self.current_user.groups])))).options(
+                joinedload(Source.comments)
+            ).order_by(
+                Source.score.desc()
+            )
             info['totalMatches'] = q.count()
             info['sources'] = q.limit(SOURCES_PER_PAGE).offset(
                 (page - 1) * SOURCES_PER_PAGE).all()
