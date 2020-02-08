@@ -7,6 +7,31 @@ import * as sourcesActions from '../ducks/sources';
 import UninitializedDBMessage from './UninitializedDBMessage';
 
 
+
+function compareValues(key, order='asc') {
+  return function(a, b) {
+    if(!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return 0;
+    let comparison = a[key].localeCompare(b[key]);
+
+    return (
+      (order == 'desc') ? (comparison * -1) : comparison
+    );
+  };
+}
+
+
+function getLatestCommentString(comment_list){
+    if (comment_list.length === 0){
+	return null;
+    } else {
+	let comment_list_copy = [...comment_list];
+	let sorted_clist = comment_list_copy.sort(compareValues('created_at', 'desc'));
+	let latest_comment = sorted_clist[0];
+	return `${latest_comment.author}: ${latest_comment.text}`;
+    }
+}
+
+
 const SourceList = () => {
   const sources = useSelector(
     (state) => state.sources
@@ -41,6 +66,7 @@ const SourceList = () => {
                 <tr>
                   <th />
                   <th />
+                  <th />
                   <th colSpan="2">
                     Position
                   </th>
@@ -62,6 +88,9 @@ const SourceList = () => {
                   </th>
                   <th>
                     Name
+                  </th>
+                  <th>
+                    Latest Comment
                   </th>
                   <th>
                     RA
@@ -119,6 +148,9 @@ const SourceList = () => {
                         <Link to={`/source/${source.id}`}>
                           {source.id}
                         </Link>
+                      </td>
+                      <td>
+                        {getLatestCommentString(source.comments)}
                       </td>
                       <td>
                         {source.ra && Number(source.ra).toFixed(3)}
