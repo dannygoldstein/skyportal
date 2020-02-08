@@ -113,6 +113,16 @@ const Source = ({ route }) => {
 
         <div className={styles.rightColumn}>
 
+          <div>
+            <input
+              type="checkbox"
+              id="highPriorityCheckbox"
+              checked={Boolean(score)}
+              onClick={(event) => updateScore(id, +event.target.checked)}
+            />
+            &nbsp;High Priority
+          </div>
+
           <Responsive
             element={FoldBox}
             title="Comments"
