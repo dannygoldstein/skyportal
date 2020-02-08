@@ -70,12 +70,6 @@ const SourceList = () => {
                   <th colSpan="2">
                     Position
                   </th>
-                  <th colSpan="4">
-                    Type
-                  </th>
-                  <th colSpan="2">
-                    Gaia
-                  </th>
                   <th />
                   <th />
                   <th />
@@ -99,27 +93,6 @@ const SourceList = () => {
                     DEC
                   </th>
                   <th>
-                    varstar
-                  </th>
-                  <th>
-                    transient
-                  </th>
-                  <th>
-                    disagree
-                  </th>
-                  <th>
-                    is_roid
-                  </th>
-                  <th>
-                    Gmag
-                  </th>
-                  <th>
-                    T
-                    <sub>
-                      eff
-                    </sub>
-                  </th>
-                  <th>
                     Score
                   </th>
                   <th>
@@ -140,7 +113,7 @@ const SourceList = () => {
               <tbody>
                 {
                   sources.latest && sources.latest.map((source, idx) => (
-                    <tr key={source.id}>
+                    <tr key={source.id} bgcolor={ source.score > 0 ? "#eb5244" : "#FFFFFF"}>
                       <td>
                         {source.last_detected && String(source.last_detected).split(".")[0]}
                       </td>
