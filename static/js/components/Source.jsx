@@ -117,8 +117,8 @@ const Source = ({ route }) => {
             <input
               type="checkbox"
               id="highPriorityCheckbox"
-              checked={Boolean(score)}
-              onClick={(event) => updateScore(id, +event.target.checked)}
+              checked={Boolean(source.score)}
+              onClick={(event) => updateScore(source.id, +event.target.checked)}
             />
             &nbsp;High Priority
           </div>
