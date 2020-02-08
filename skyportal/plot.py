@@ -144,7 +144,7 @@ def _plot_to_json(plot):
     return docs_json, render_items, custom_model_js
 
 
-tooltip_format = [('mjd', '@mjd{%.6f}'), ('flux', '@flux'), ('filter', '@filter'), ('fluxerr', '@fluxerr'),
+tooltip_format = [('mjd', '@mjd{(.00)}'), ('flux', '@flux'), ('filter', '@filter'), ('fluxerr', '@fluxerr'),
                   ('mag', '@mag'), ('magerr', '@magerr'), ('lim_mag', '@lim_mag')]
 
 
@@ -177,7 +177,7 @@ def photometry_plot(source_id):
               'header_1': 'MAGZP',
               'header_2': 'APCOR4',
               'source_id_1': source_id}
-    
+
     raw = pd.read_sql(query, DBSession().get_bind(), params=params)
     data = pd.DataFrame([{
         'mjd': r['obsmjd'],
@@ -188,7 +188,7 @@ def photometry_plot(source_id):
         'flux': r['objectswithflux_flux'],
         'fluxerr': r['objectswithflux_fluxerr']
         } for _, r in raw.iterrows()])
-    
+
     data['telescope'] = 'P48'
     data['instrument'] = 'ZTF Camera'
 
