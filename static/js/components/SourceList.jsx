@@ -95,19 +95,6 @@ const SourceList = () => {
                   <th>
                     Score
                   </th>
-                  <th>
-                    N
-                    <br />
-                    detections
-                  </th>
-                  <th>
-                    Simbad
-                    <br />
-                    Class
-                  </th>
-                  <th>
-                    TNS Name
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -132,34 +119,7 @@ const SourceList = () => {
                         {source.dec && Number(source.dec.toFixed(4))}
                       </td>
                       <td>
-                        {source.varstar.toString()}
-                      </td>
-                      <td>
-                        {source.transient.toString()}
-                      </td>
-                      <td>
-                        {(source.transient === source.varstar).toString()}
-                      </td>
-                      <td>
-                        {source.is_roid.toString()}
-                      </td>
-                      <td>
-                        {source.gaia_info && Number(JSON.parse(source.gaia_info).Gmag).toFixed(2)}
-                      </td>
-                      <td>
-                        {source.gaia_info && JSON.parse(source.gaia_info).Teff && Number(JSON.parse(source.gaia_info).Teff).toFixed(1)}
-                      </td>
-                      <td>
                         {Number(source.score).toFixed(2)}
-                      </td>
-                      <td>
-                        {source.detect_photometry_count}
-                      </td>
-                      <td>
-                        {source.simbad_class}
-                      </td>
-                      <td>
-                        {source.tns_name}
                       </td>
                     </tr>
                   ))
