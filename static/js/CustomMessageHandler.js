@@ -3,6 +3,7 @@ import * as sourceActions from './ducks/source';
 import * as groupActions from './ducks/group';
 import * as groupsActions from './ducks/groups';
 import * as profileActions from './ducks/profile';
+import * as sourcesActions from './ducks/sources';
 
 
 const CustomMessageHandler = (dispatch, getState) => (
@@ -37,6 +38,11 @@ const CustomMessageHandler = (dispatch, getState) => (
       }
       case profileActions.FETCH_USER_PROFILE: {
         dispatch(profileActions.fetchUserProfile());
+        break;
+      }
+      case sourcesActions.FETCH_SOURCES: {
+        const state = getState();
+        dispatch(sourcesActions.fetchSources(state.sources.pageNumber));
         break;
       }
       default:
