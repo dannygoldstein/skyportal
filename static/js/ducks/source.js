@@ -47,7 +47,7 @@ export function fetchSource(id) {
 }
 
 export function updateScore({ source_id, value }) {
-  return API.PUT(`/api/sources/${source_id}`, FETCH_LOADED_SOURCE, { score: value });
+  return API.PUT(`/api/sources/${source_id}`, UPDATE_SCORE, { score: value });
 }
 
 // Reducer for currently displayed source
