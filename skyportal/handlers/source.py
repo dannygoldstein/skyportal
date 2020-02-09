@@ -172,6 +172,7 @@ class SourceHandler(BaseHandler):
                               f'{e.normalized_messages()}')
         DBSession().commit()
 
+        self.push_all(action='REFRESH_SOURCES')
         return self.success(action='skyportal/REFRESH_SOURCE',
                             payload={'source_id': source_id})
 
