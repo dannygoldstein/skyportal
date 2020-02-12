@@ -64,7 +64,7 @@ class SourceHandler(BaseHandler):
                     [g.id for g in self.current_user.groups])))).options(
                 joinedload(Source.comments)
             ).order_by(
-                Source.score.desc()
+                Source.highprio.desc(), Source.score.desc()
             )
             info['totalMatches'] = q.count()
             info['sources'] = q.limit(SOURCES_PER_PAGE).offset(
@@ -172,9 +172,8 @@ class SourceHandler(BaseHandler):
                               f'{e.normalized_messages()}')
         DBSession().commit()
 
-        self.push_all(action='skyportal/FETCH_SOURCES')
-        return self.success(action='skyportal/REFRESH_SOURCE',
-                            payload={'source_id': source_id})
+        #self.push_all(action='skyportal/FETCH_SOURCES')
+        return self.success(data={'source': s})
 
     @permissions(['Manage sources'])
     def delete(self, source_id):
@@ -213,7 +212,7 @@ class FilterSourcesHandler(BaseHandler):
         info['pageNumber'] = page
         q = Source.query.filter(Source.id.in_(DBSession.query(
                 GroupSource.source_id).filter(GroupSource.group_id.in_(
-                    [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments)).order_by(Source.score.desc())
+                    [g.id for g in self.current_user.groups])))).options(joinedload(Source.comments)).order_by(Source.highprio.desc(), Source.score.desc())
 
         if data['sourceID']:
             q = q.filter(Source.id.contains(data['sourceID'].strip()))

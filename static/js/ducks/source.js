@@ -47,7 +47,7 @@ export function fetchSource(id) {
 }
 
 export function updateScore({ source_id, value }) {
-  return API.PUT(`/api/sources/${source_id}`, UPDATE_SCORE, { score: value });
+  return API.PUT(`/api/sources/${source_id}`, UPDATE_SCORE, { highprio: value });
 }
 
 // Reducer for currently displayed source
@@ -66,6 +66,13 @@ export default function reducer(state={ source: null, loadError: false }, action
         ...state,
         loadError: true
       };
+    case UPDATE_SCORE_OK: {
+      const { highprio } = action.data.source;
+      return {
+        ...state,
+        highprio
+      }
+    }      
     default:
       return state;
   }

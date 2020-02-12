@@ -90,6 +90,7 @@ class Source(Base):
     # TODO should this column type be decimal? fixed-precison numeric
     ra = sa.Column(sa.Float)
     dec = sa.Column(sa.Float)
+    highprio = sa.Column(sa.Boolean)
 
     ra_dis = sa.Column(sa.Float)
     dec_dis = sa.Column(sa.Float)

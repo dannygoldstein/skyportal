@@ -100,7 +100,7 @@ const SourceList = () => {
               <tbody>
                 {
                   sources.latest && sources.latest.map((source, idx) => (
-                    <tr key={source.id} bgcolor={ source.score > 0 ? "#eb5244" : "#FFFFFF"}>
+                    <tr key={source.id} bgcolor={ Boolean(source.highprio) ? "#eb5244" : "#FFFFFF"}>
                       <td>
                         {source.last_detected && String(source.last_detected).split(".")[0]}
                       </td>
