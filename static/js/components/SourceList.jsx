@@ -32,6 +32,21 @@ function getLatestCommentString(comment_list){
 }
 
 
+function getNDays(source){
+    return (new Date().getTime() / 86400000) + 2440587.5 - 2400000.5 - source.last_mjd
+}
+
+
+function getColor(source){
+   if (Boolean(source.highprio)) {
+      return "#eb5244"
+   }  else if (getNDays(source) < 40) {
+      return "#32cd32"
+   } else {
+      return "#ffffff"
+   }
+}
+
 const SourceList = () => {
   const sources = useSelector(
     (state) => state.sources
@@ -100,9 +115,9 @@ const SourceList = () => {
               <tbody>
                 {
                   sources.latest && sources.latest.map((source, idx) => (
-                    <tr key={source.id} bgcolor={ Boolean(source.highprio) ? "#eb5244" : "#FFFFFF"}>
+                    <tr key={source.id} bgcolor={getColor(source)}>
                       <td>
-                        {source.last_detected && String(source.last_detected).split(".")[0]}
+                        {getNDays(source) && Number(getNDays(source)).toFixed(2)} days ago
                       </td>
                       <td>
                         <Link to={`/source/${source.id}`}>
