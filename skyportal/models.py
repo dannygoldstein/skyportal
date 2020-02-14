@@ -91,6 +91,7 @@ class Source(Base):
     ra = sa.Column(sa.Float)
     dec = sa.Column(sa.Float)
     highprio = sa.Column(sa.Boolean)
+    neighbor_info = sa.Column(JSONB)
 
     ra_dis = sa.Column(sa.Float)
     dec_dis = sa.Column(sa.Float)
@@ -104,6 +105,7 @@ class Source(Base):
     altdata = sa.Column(JSONB, nullable=True)
 
     last_detected = sa.Column(ArrowType, nullable=True)
+    last_mjd = sa.Column(sa.Float)
     dist_nearest_source = sa.Column(sa.Float, nullable=True)
     mag_nearest_source = sa.Column(sa.Float, nullable=True)
     e_mag_nearest_source = sa.Column(sa.Float, nullable=True)
