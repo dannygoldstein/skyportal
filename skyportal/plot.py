@@ -12,6 +12,7 @@ from bokeh.plotting import figure, ColumnDataSource
 from bokeh.util.compiler import bundle_all_models
 from bokeh.util.serialization import make_id
 from arrow.arrow import Arrow
+from bokeh.models import LinearAxis, Range1d
 
 import os
 
@@ -20,6 +21,7 @@ from skyportal.models import (DBSession, Source, Photometry,
 
 from sncosmo.photdata import PhotometricData
 from astropy.table import Table
+from astropy.cosmology import Planck15
 
 
 DETECT_THRESH = 5  # sigma
@@ -161,6 +163,8 @@ def photometry_plot(source_id):
         Returns (docs_json, render_items) json for the desired plot.
     """
     color_map = {'ipr': 'yellow', 'rpr': 'red', 'ztfg': 'green', 'ztfi': 'orange', 'ztfr': 'red'}
+
+    source = Source.query.get(source_id)    
 
     query = """SELECT scienceimages.obsjd - %(obsjd_1)s AS obsmjd, scienceimages.filtercode AS 
                scienceimages_filtercode, calibratableimages.header -> %(header_1)s AS magzp, 
@@ -338,7 +342,8 @@ def photometry_plot(source_id):
         plot_height=300,
         active_drag='box_zoom',
         tools='box_zoom,wheel_zoom,pan,reset',
-        y_range=(np.nanmax(ymax), np.nanmin(ymin))
+        y_range=(np.nanmax(ymax), np.nanmin(ymin)),
+        toolbar_location='above'
     )
 
     imhover = HoverTool(tooltips=tooltip_format)
@@ -427,6 +432,15 @@ def photometry_plot(source_id):
 
     plot.xaxis.axis_label = 'MJD'
     plot.yaxis.axis_label = 'mag'
+
+    if source.redshift > 0:
+        distmod = Planck15.distmod(source.redshift).value
+        plot.extra_y_ranges = {'M': Range1d(start=np.nanmax(ymax) - distmod,
+                                            end=np.nanmin(ymin) - distmod)}
+        
+        plot.add_layout(LinearAxis(y_range_name='M', axis_label='Abs Mag'),
+                        'right')
+                        
     plot.toolbar.logo = None
 
     toggle = CheckboxWithLegendGroup(
