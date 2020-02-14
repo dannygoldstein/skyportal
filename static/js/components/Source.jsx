@@ -73,11 +73,41 @@ const Source = ({ route }) => {
           )
           <br />
           <b>
-            Redshift:
+            zspec:
             &nbsp;
           </b>
-          {source.redshift}
-          <br />
+          {source.neighbor_info['z_spec'] > 0 && Number(source.neighbor_info['z_spec']).toFixed(4)}
+	  <br />	  
+          <b>
+            zphot_l68:
+            &nbsp;
+          </b>
+          {source.neighbor_info['z_phot_l68'] && Number(source.neighbor_info['z_phot_l68']).toFixed(4)}
+	  &nbsp;
+	  <br />
+          <b>
+            zphot_med:
+            &nbsp;
+          </b>
+          {source.neighbor_info['z_phot_median'] && Number(source.neighbor_info['z_phot_median']).toFixed(4)}
+	  &nbsp;
+	  <br />
+          <b>
+            zphot_u68:
+            &nbsp;
+          </b>
+          {source.neighbor_info['z_phot_u68'] && Number(source.neighbor_info['z_phot_u68']).toFixed(4)}
+	  &nbsp;
+	  <br />
+          <b>
+	    dzphot / (1 + zphot):
+            &nbsp;
+          </b>
+          {source.neighbor_info['z_phot_median'] && Number(source.neighbor_info['z_phot_std'] / (1 + source.neighbor_info['z_phot_median'])).toFixed(4)}
+	  &nbsp;
+	  <br />
+
+	  
           <ThumbnailList ra={source.ra} dec={source.dec} thumbnails={source.thumbnails} />
 
           <br />
