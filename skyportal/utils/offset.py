@@ -552,7 +552,7 @@ def get_nearby_offset_stars(
         else:
             offsets = ""
 
-        name = f"{basename}_off{i+1}"
+        name = f"{basename}_S{i+1}"
 
         star_list_format = (
             f"{name:{space}<{maxname_size}} "
