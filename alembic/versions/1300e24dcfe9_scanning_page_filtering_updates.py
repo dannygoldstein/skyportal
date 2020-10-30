@@ -29,9 +29,9 @@ def upgrade():
             'created_at', postgresql.TIMESTAMP()
         ),  # column with the imputation values
     )
-    # Use Alchemy's connection and transaction to noodle over the data.
     connection = op.get_bind()
-    # Set existing data to be owned by the provisioned admin.
+
+    # set candidates with a null passed at to be created_at
     connection.execute(
         candidates.update()
         .where(candidates.c.passed_at.is_(None))
