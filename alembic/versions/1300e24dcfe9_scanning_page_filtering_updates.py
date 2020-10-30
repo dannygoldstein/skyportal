@@ -7,6 +7,7 @@ Create Date: 2020-10-29 18:45:35.520499
 """
 from alembic import op
 from sqlalchemy.dialects import postgresql
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '1300e24dcfe9'
@@ -16,6 +17,27 @@ depends_on = None
 
 
 def upgrade():
+
+    # Data migration: takes a few steps...
+    # Declare ORM table views. Note that the view contains old and new columns!
+    candidates = sa.Table(
+        'candidates',
+        sa.MetaData(),
+        sa.Column('id', sa.Integer()),
+        sa.Column('passed_at', postgresql.TIMESTAMP()),  # column to be updated
+        sa.Column(
+            'created_at', postgresql.TIMESTAMP()
+        ),  # column with the imputation values
+    )
+    # Use Alchemy's connection and transaction to noodle over the data.
+    connection = op.get_bind()
+    # Set existing data to be owned by the provisioned admin.
+    connection.execute(
+        candidates.update()
+        .where(candidates.c.passed_at.is_(None))
+        .values(passed_at=candidates.c.created_at)
+    )
+
     op.alter_column(
         'candidates', 'passed_at', existing_type=postgresql.TIMESTAMP(), nullable=False
     )
