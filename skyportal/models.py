@@ -117,7 +117,7 @@ def is_modifiable_by(self, user):
 
     Returns
     -------
-    owned: bool
+    modifiable: bool
        Whether the Object can be modified by the User.
     """
 
@@ -742,6 +742,16 @@ class Filter(Base):
 
 class Candidate(Base):
     "An Obj that passed a Filter, becoming scannable on the Filter's scanning page."
+
+    __table_args__ = (
+        sa.Index(
+            "candidates_main_index", 'obj_id', 'filter_id', 'passed_at', unique=True,
+        ),
+        sa.Index(
+            "candidates_reverse_index", 'filter_id', 'obj_id', 'passed_at', unique=True,
+        ),
+    )
+
     obj_id = sa.Column(
         sa.ForeignKey("objs.id", ondelete="CASCADE"),
         nullable=False,
@@ -784,77 +794,63 @@ class Candidate(Base):
         doc="ID of the user that posted the candidate",
     )
 
+    def get_obj_if_readable_by(self, user_or_token, options=[]):
+        """Return an Obj from the database if the Obj is a Candidate in at
+        least one of the requesting User or Token owner's accessible Groups.
+        If the Obj is not a Candidate in one of the User or Token owner's
+        accessible Groups, raise an AccessError. If the Obj does not exist,
+        return `None`.
 
-Candidate.__table_args__ = (
-    sa.Index(
-        "candidates_main_index",
-        Candidate.obj_id,
-        Candidate.filter_id,
-        Candidate.passed_at,
-        unique=True,
-    ),
-)
+        Parameters
+        ----------
+        self : integer or string
+           Primary key of the Obj.
+        user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
+           The requesting `User` or `Token` object.
+        options : list of `sqlalchemy.orm.MapperOption`s
+           Options that wil be passed to `options()` in the loader query.
 
+        Returns
+        -------
+        obj : `skyportal.models.Obj`
+           The requested Obj.
+        """
 
-def get_candidate_if_owned_by(obj_id, user_or_token, options=[]):
-    """Return an Obj from the database if the Obj is a Candidate in at least
-    one of the requesting User or Token owner's accessible Groups. If the Obj is not a
-    Candidate in one of the User or Token owner's accessible Groups, raise an AccessError.
-    If the Obj does not exist, return `None`.
-
-    Parameters
-    ----------
-    obj_id : integer or string
-       Primary key of the Obj.
-    user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
-       The requesting `User` or `Token` object.
-    options : list of `sqlalchemy.orm.MapperOption`s
-       Options that wil be passed to `options()` in the loader query.
-
-    Returns
-    -------
-    obj : `skyportal.models.Obj`
-       The requested Obj.
-    """
-
-    if Candidate.query.filter(Candidate.obj_id == obj_id).first() is None:
-        return None
-    user_group_ids = [g.id for g in user_or_token.accessible_groups]
-    c = (
-        Candidate.query.filter(Candidate.obj_id == obj_id)
-        .filter(
-            Candidate.filter_id.in_(
-                DBSession.query(Filter.id).filter(Filter.group_id.in_(user_group_ids))
+        if Candidate.query.filter(Candidate.obj_id == self).first() is None:
+            return None
+        user_group_ids = [g.id for g in user_or_token.accessible_groups]
+        c = (
+            Candidate.query.filter(Candidate.obj_id == self)
+            .filter(
+                Candidate.filter_id.in_(
+                    DBSession.query(Filter.id).filter(
+                        Filter.group_id.in_(user_group_ids)
+                    )
+                )
             )
+            .options(options)
+            .first()
         )
-        .options(options)
-        .first()
-    )
-    if c is None:
-        raise AccessError("Insufficient permissions.")
-    return c.obj
+        if c is None:
+            raise AccessError("Insufficient permissions.")
+        return c.obj
+
+    def is_readable_by(self, user_or_token):
+        """Return a boolean indicating whether the Candidate passed the Filter
+        of any of a User or Token owner's accessible Groups.
 
 
-def candidate_is_owned_by(self, user_or_token):
-    """Return a boolean indicating whether the Candidate passed the Filter
-    of any of a User or Token owner's accessible Groups.
+        Parameters
+        ----------
+        user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
+           The requesting `User` or `Token` object.
 
-
-    Parameters
-    ----------
-    user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
-       The requesting `User` or `Token` object.
-
-    Returns
-    -------
-    owned : bool
-       Whether the Candidate is owned by the User or Token owner.
-    """
-    return self.filter.group in user_or_token.accessible_groups
-
-
-Candidate.get_obj_if_owned_by = get_candidate_if_owned_by
-Candidate.is_owned_by = candidate_is_owned_by
+        Returns
+        -------
+        readable : bool
+           Whether the Candidate is owned by the User or Token owner.
+        """
+        return self.filter.group in user_or_token.accessible_groups
 
 
 Source = join_model("sources", Group, Obj)
