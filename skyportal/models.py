@@ -85,10 +85,10 @@ def get_app_base_url():
     )
 
 
-def is_owned_by(self, user_or_token):
-    """Generic ownership logic for any `skyportal` ORM model.
+def is_readable_by(self, user_or_token):
+    """Generic readability logic for any `skyportal` ORM model.
 
-    Models with complicated ownership logic should implement their own method
+    Models with complicated readability logic should implement their own method
     instead of adding too many additional conditions here.
     """
     if hasattr(self, 'tokens'):
@@ -103,12 +103,12 @@ def is_owned_by(self, user_or_token):
                 return True
         return user_or_token in self.users
 
-    raise NotImplementedError(f"{type(self).__name__} object has no owner")
+    raise NotImplementedError(f"{type(self).__name__} cannot be read")
 
 
 def is_modifiable_by(self, user):
-    """Return a boolean indicating whether an object point can be modified or
-    deleted by a given user.
+    """Return a boolean indicating whether an object point can be modified
+    by a given user.
 
     Parameters
     ----------
@@ -125,15 +125,16 @@ def is_modifiable_by(self, user):
         raise TypeError(
             f'Object {self} does not have an `owner` attribute, '
             f'and thus does not expose the interface that is needed '
-            f'to check for modification or deletion privileges.'
+            f'to check for modification privileges.'
         )
 
     is_admin = "System admin" in user.permissions
-    owns_spectrum = self.owner is user
-    return is_admin or owns_spectrum
+    is_owner = self.owner is user
+    return is_admin or is_owner
 
 
-Base.is_owned_by = is_owned_by
+Base.is_readable_by = is_readable_by
+Base.is_modifiable_by = is_modifiable_by
 
 
 class NumpyArray(sa.types.TypeDecorator):
