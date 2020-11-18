@@ -839,7 +839,6 @@ class Candidate(Base):
         """Return a boolean indicating whether the Candidate passed the Filter
         of any of a User or Token owner's accessible Groups.
 
-
         Parameters
         ----------
         user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
@@ -848,7 +847,7 @@ class Candidate(Base):
         Returns
         -------
         readable : bool
-           Whether the Candidate is owned by the User or Token owner.
+           Whether the Candidate is readable by the User or Token owner.
         """
         return self.filter.group in user_or_token.accessible_groups
 
@@ -919,7 +918,7 @@ Obj.candidates = relationship(
 )
 
 
-def source_is_owned_by(self, user_or_token):
+def source_is_readable_by(self, user_or_token):
     """Return a boolean indicating whether the Source has been saved to
     any of a User or Token owner's accessible Groups.
 
@@ -930,8 +929,8 @@ def source_is_owned_by(self, user_or_token):
 
     Returns
     -------
-    owned : bool
-       Whether the Candidate is owned by the User or Token owner.
+    readable : bool
+       Whether the Candidate is readable by the User or Token owner.
     """
 
     source_group_ids = [
@@ -943,7 +942,7 @@ def source_is_owned_by(self, user_or_token):
     return bool(set(source_group_ids) & {g.id for g in user_or_token.accessible_groups})
 
 
-def get_source_if_owned_by(obj_id, user_or_token, options=[]):
+def get_source_obj_if_readable_by(obj_id, user_or_token, options=[]):
     """Return an Obj from the database if the Obj is a Source in at least
     one of the requesting User or Token owner's accessible Groups. If the Obj is not a
     Source in one of the User or Token owner's accessible Groups, raise an AccessError.
@@ -978,8 +977,8 @@ def get_source_if_owned_by(obj_id, user_or_token, options=[]):
     return s.obj
 
 
-Source.is_owned_by = source_is_owned_by
-Source.get_obj_if_owned_by = get_source_if_owned_by
+Source.is_readable_by = source_is_readable_by
+Source.get_obj_if_readable_by = get_source_obj_if_readable_by
 
 
 def get_obj_if_owned_by(obj_id, user_or_token, options=[]):
