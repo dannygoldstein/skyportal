@@ -16,10 +16,10 @@ import sqlalchemy as sa
 from sqlalchemy import cast, event
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects import postgresql as psql
-from sqlalchemy.orm import relationship, joinedload
+from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 from sqlalchemy_utils import URLType, EmailType
 from sqlalchemy import func
 
@@ -700,6 +700,80 @@ class Obj(Base, ha.Point):
 
         return telescope.observer.altaz(time, self.target).alt
 
+    @classmethod
+    def get_if_readable_by(cls, obj_id, user_or_token, options=[]):
+        """Return an Obj from the database if the Obj is either a Source or a
+        Candidate in at least one of the requesting User or Token owner's
+        accessible Groups. If the Obj is not a Source or a Candidate in one
+        of the User or Token owner's accessible Groups, raise an AccessError.
+        If the Obj does not exist, return `None`.
+
+        Parameters
+        ----------
+        obj_id : integer or string
+           Primary key of the Obj.
+        user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
+           The requesting `User` or `Token` object.
+        options : list of `sqlalchemy.orm.MapperOption`s
+           Options that wil be passed to `options()` in the loader query.
+
+        Returns
+        -------
+        obj : `skyportal.models.Obj`
+           The requested Obj.
+        """
+
+        if Obj.query.get(obj_id) is None:
+            return None
+        if "System admin" in user_or_token.permissions:
+            return Obj.query.options(options).get(obj_id)
+
+        obj = (
+            DBSession()
+            .query(Obj)
+            .filter(Obj.is_readable_by(user_or_token))
+            .options(options)
+        )
+
+        if obj is None:
+            raise AccessError('Insufficient permissions.')
+
+        # If we get here, the user has access to either the associated Source
+        # or Candidate
+        return obj
+
+    def _readbility_clause(self, selectable, user_or_token):
+        accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
+        return (
+            selectable.select_from(Obj)
+            .outerjoin(Source, self.id == Source.obj_id)
+            .outerjoin(Candidate, self.id == Candidate.obj_id)
+            .outerjoin(Filter, Candidate.filter_id == Filter.id)
+            .outerjoin(Photometry, self.id == Photometry.obj_id)
+            .outerjoin(GroupPhotometry, Photometry.id == GroupPhotometry.photometr_id)
+            .filter(
+                GroupPhotometry.group_id.in_(accessible_group_ids),
+                Source.group_id.in_(accessible_group_ids),
+                Filter.group_id.in_(accessible_group_ids),
+            )
+            .group_by(Obj.id)
+        )
+
+    @hybrid_method
+    def is_readable_by(self, user_or_token):
+        selectable = DBSession().query(func.count('*') > 0)
+        return self._readbility_clause(selectable, user_or_token).scalar()
+
+    @is_readable_by.expression
+    def is_readable_by(cls, user_or_token):
+        selectable = sa.select([func.count(Obj.id)])
+        return (
+            cls._readbility_clause(selectable, user_or_token).label(
+                'obj_ownership_check'
+            )
+            > 0
+        )
+
 
 class Filter(Base):
     """An alert filter that operates on a Stream. A Filter is associated
@@ -835,6 +909,7 @@ class Candidate(Base):
             raise AccessError("Insufficient permissions.")
         return c.obj
 
+    @hybrid_method
     def is_readable_by(self, user_or_token):
         """Return a boolean indicating whether the Candidate passed the Filter
         of any of a User or Token owner's accessible Groups.
@@ -849,7 +924,7 @@ class Candidate(Base):
         readable : bool
            Whether the Candidate is readable by the User or Token owner.
         """
-        return self.filter.group in user_or_token.accessible_groups
+        return self.filter.group.in_(user_or_token.accessible_groups)
 
 
 Source = join_model("sources", Group, Obj)
@@ -981,60 +1056,6 @@ Source.is_readable_by = source_is_readable_by
 Source.get_obj_if_readable_by = get_source_obj_if_readable_by
 
 
-def get_obj_if_owned_by(obj_id, user_or_token, options=[]):
-    """Return an Obj from the database if the Obj is either a Source or a Candidate in at least
-    one of the requesting User or Token owner's accessible Groups. If the Obj is not a
-    Source or a Candidate in one of the User or Token owner's accessible Groups, raise an AccessError.
-    If the Obj does not exist, return `None`.
-
-    Parameters
-    ----------
-    obj_id : integer or string
-       Primary key of the Obj.
-    user_or_token : `baselayer.app.models.User` or `baselayer.app.models.Token`
-       The requesting `User` or `Token` object.
-    options : list of `sqlalchemy.orm.MapperOption`s
-       Options that wil be passed to `options()` in the loader query.
-
-    Returns
-    -------
-    obj : `skyportal.models.Obj`
-       The requested Obj.
-    """
-
-    def construct_joinedload(base, additional_attrs):
-        jl = joinedload(base)
-        for attr in additional_attrs:
-            jl = jl.joinedload(attr)
-        return jl
-
-    if Obj.query.get(obj_id) is None:
-        return None
-    if "System admin" in user_or_token.permissions:
-        return Obj.query.options(options).get(obj_id)
-
-    # the order of the following attempts is important -
-    # this one should come first
-    if Obj.get_photometry_owned_by_user(obj_id, user_or_token):
-        return Obj.query.options(options).get(obj_id)
-
-    try:
-        source_opts = [construct_joinedload(Source.obj, o.path) for o in options]
-        obj = Source.get_obj_if_owned_by(obj_id, user_or_token, source_opts)
-    except AccessError:  # They may still be able to view the associated Candidate
-        cand_opts = [construct_joinedload(Candidate.obj, o.path) for o in options]
-        obj = Candidate.get_obj_if_owned_by(obj_id, user_or_token, cand_opts)
-
-    if obj is None:
-        raise AccessError('Insufficient permissions.')
-
-    # If we get here, the user has access to either the associated Source or Candidate
-    return obj
-
-
-Obj.get_if_owned_by = get_obj_if_owned_by
-
-
 def get_obj_comments_owned_by(self, user_or_token):
     """Query the database and return the Comments on this Obj that are accessible
     to any of the User or Token owner's accessible Groups.
@@ -1050,7 +1071,7 @@ def get_obj_comments_owned_by(self, user_or_token):
        The accessible comments attached to this Obj.
     """
     owned_comments = [
-        comment for comment in self.comments if comment.is_owned_by(user_or_token)
+        comment for comment in self.comments if comment.is_readable_by(user_or_token)
     ]
 
     # Grab basic author info for the comments
@@ -1080,7 +1101,7 @@ def get_obj_annotations_owned_by(self, user_or_token):
     owned_annotations = [
         annotation
         for annotation in self.annotations
-        if annotation.is_owned_by(user_or_token)
+        if annotation.is_readable_by(user_or_token)
     ]
 
     # Grab basic author info for the annotations
@@ -1110,7 +1131,7 @@ def get_obj_classifications_owned_by(self, user_or_token):
     return [
         classifications
         for classifications in self.classifications
-        if classifications.is_owned_by(user_or_token)
+        if classifications.is_readable_by(user_or_token)
     ]
 
 
@@ -1665,7 +1686,7 @@ class Comment(Base):
     def get_if_owned_by(cls, ident, user, options=[]):
         comment = cls.query.options(options).get(ident)
 
-        if comment is not None and not comment.is_owned_by(user):
+        if comment is not None and not comment.is_readable_by(user):
             raise AccessError('Insufficient permissions.')
 
         # Grab basic author info for the comment
@@ -1735,7 +1756,7 @@ class Annotation(Base):
     def get_if_owned_by(cls, ident, user, options=[]):
         annotation = cls.query.options(options).get(ident)
 
-        if annotation is not None and not annotation.is_owned_by(user):
+        if annotation is not None and not annotation.is_readable_by(user):
             raise AccessError('Insufficient permissions.')
 
         # Grab basic author info for the annotation

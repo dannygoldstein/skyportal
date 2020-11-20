@@ -127,7 +127,7 @@ class ObservingRunHandler(BaseHandler):
             # filter out the assignments of objects that are not visible to
             # the user
             assignments = list(
-                filter(lambda a: a.obj.is_owned_by(self.current_user), assignments)
+                filter(lambda a: a.obj.is_readable_by(self.current_user), assignments)
             )
 
             data = ObservingRunGetWithAssignments.dump(run)

@@ -392,7 +392,9 @@ class SourceHandler(BaseHandler):
                 query_options.append(
                     joinedload(Obj.photometry).joinedload(Photometry.instrument)
                 )
-            s = Obj.get_if_owned_by(obj_id, self.current_user, options=query_options,)
+            s = Obj.get_if_readable_by(
+                obj_id, self.current_user, options=query_options,
+            )
 
             if s is None:
                 return self.error("Source not found", status=404)
@@ -777,7 +779,7 @@ class SourceHandler(BaseHandler):
                 schema: Error
         """
         # Permissions check
-        _ = Obj.get_if_owned_by(obj_id, self.current_user)
+        _ = Obj.get_if_readable_by(obj_id, self.current_user)
         data = self.get_json()
         data['id'] = obj_id
 
@@ -955,7 +957,7 @@ class SourceOffsetsHandler(BaseHandler):
               application/json:
                 schema: Error
         """
-        source = Obj.get_if_owned_by(
+        source = Obj.get_if_readable_by(
             obj_id, self.current_user, options=[joinedload(Obj.photometry)],
         )
         if source is None:
@@ -1126,7 +1128,7 @@ class SourceFinderHandler(BaseHandler):
               application/json:
                 schema: Error
         """
-        source = Obj.get_if_owned_by(
+        source = Obj.get_if_readable_by(
             obj_id, self.current_user, options=[joinedload(Obj.photometry)],
         )
         if source is None:
@@ -1341,7 +1343,7 @@ class SourceNotificationHandler(BaseHandler):
         if data.get("sourceId") is None:
             return self.error("Missing required parameter `sourceId`")
 
-        source = Obj.get_if_owned_by(data["sourceId"], self.current_user)
+        source = Obj.get_if_readable_by(data["sourceId"], self.current_user)
         if source is None:
             return self.error('Source not found', status=404)
 

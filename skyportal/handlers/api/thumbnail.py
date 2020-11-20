@@ -59,7 +59,7 @@ class ThumbnailHandler(BaseHandler):
         if 'obj_id' not in data:
             return self.error("Missing required parameter: obj_id")
         obj_id = data['obj_id']
-        obj = Obj.get_if_owned_by(obj_id, self.current_user)
+        obj = Obj.get_if_readable_by(obj_id, self.current_user)
         if obj is None:
             return self.error(f"Invalid obj_id: {obj_id}")
         try:
