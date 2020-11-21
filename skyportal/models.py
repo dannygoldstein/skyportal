@@ -704,9 +704,10 @@ class Obj(Base, ha.Point):
     def get_if_readable_by(cls, obj_id, user_or_token, options=[]):
         """Return an Obj from the database if the Obj is either a Source or a
         Candidate in at least one of the requesting User or Token owner's
-        accessible Groups. If the Obj is not a Source or a Candidate in one
-        of the User or Token owner's accessible Groups, raise an AccessError.
-        If the Obj does not exist, return `None`.
+        accessible Groups, or if the Obj has any photometry that is associated
+        with one of the querying User's groups. If the Obj exists but does not
+        satisfy these criteria, raise an AccessError. If the Obj does not exist,
+        return `None`.
 
         Parameters
         ----------
@@ -755,22 +756,27 @@ class Obj(Base, ha.Point):
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
         accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
+        alias = sa.alias(cls)
+        candfilt = sa.join(Candidate, Filter)
+        phot_grpphot = sa.join(Photometry, GroupPhotometry)
+
         return (
-            sa.select([func.count(cls.id)])
+            sa.select([func.count(alias.c.id)])
             .select_from(
-                sa.outerjoin(cls, Source, cls.id == Source.obj_id)
-                .outerjoin(Candidate, cls.id == Candidate.obj_id)
-                .outerjoin(Filter, Candidate.filter_id == Filter.id)
-                .outerjoin(Photometry, cls.id == Photometry.obj_id)
-                .outerjoin(
-                    GroupPhotometry, Photometry.id == GroupPhotometry.photometr_id
+                sa.outerjoin(alias, Source, alias.c.id == Source.obj_id)
+                .outerjoin(candfilt, alias.c.id == Candidate.obj_id)
+                .outerjoin(phot_grpphot, alias.c.id == Photometry.obj_id)
+            )
+            .where(
+                sa.or_(
+                    GroupPhotometry.group_id.in_(accessible_group_ids),
+                    Source.group_id.in_(accessible_group_ids),
+                    Filter.group_id.in_(accessible_group_ids),
                 )
             )
-            .where(GroupPhotometry.group_id.in_(accessible_group_ids),)
-            .where(Source.group_id.in_(accessible_group_ids))
-            .where(Filter.group_id.in_(accessible_group_ids),)
-            .group_by(Obj.id)
-            .label('obj_ownership_check')
+            .where(alias.c.id == cls.id)
+            .group_by(alias.c.id)
+            .label('ownership_query')
             > 0
         )
 
