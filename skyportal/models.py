@@ -742,35 +742,35 @@ class Obj(Base, ha.Point):
         # or Candidate
         return obj
 
-    def _readbility_clause(self, selectable, user_or_token):
-        accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
-        return (
-            selectable.select_from(Obj)
-            .outerjoin(Source, self.id == Source.obj_id)
-            .outerjoin(Candidate, self.id == Candidate.obj_id)
-            .outerjoin(Filter, Candidate.filter_id == Filter.id)
-            .outerjoin(Photometry, self.id == Photometry.obj_id)
-            .outerjoin(GroupPhotometry, Photometry.id == GroupPhotometry.photometr_id)
-            .filter(
-                GroupPhotometry.group_id.in_(accessible_group_ids),
-                Source.group_id.in_(accessible_group_ids),
-                Filter.group_id.in_(accessible_group_ids),
-            )
-            .group_by(Obj.id)
-        )
-
     @hybrid_method
     def is_readable_by(self, user_or_token):
-        selectable = DBSession().query(func.count('*') > 0)
-        return self._readbility_clause(selectable, user_or_token).scalar()
+        return (
+            DBSession()
+            .query(Obj.id)
+            .filter(Obj.is_readable_by(user_or_token), Obj.id == self.id)
+            .count()
+            > 0
+        )
 
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
-        selectable = sa.select([func.count(Obj.id)])
+        accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
         return (
-            cls._readbility_clause(selectable, user_or_token).label(
-                'obj_ownership_check'
+            sa.select([func.count(cls.id)])
+            .select_from(
+                sa.outerjoin(cls, Source, cls.id == Source.obj_id)
+                .outerjoin(Candidate, cls.id == Candidate.obj_id)
+                .outerjoin(Filter, Candidate.filter_id == Filter.id)
+                .outerjoin(Photometry, cls.id == Photometry.obj_id)
+                .outerjoin(
+                    GroupPhotometry, Photometry.id == GroupPhotometry.photometr_id
+                )
             )
+            .where(GroupPhotometry.group_id.in_(accessible_group_ids),)
+            .where(Source.group_id.in_(accessible_group_ids))
+            .where(Filter.group_id.in_(accessible_group_ids),)
+            .group_by(Obj.id)
+            .label('obj_ownership_check')
             > 0
         )
 
