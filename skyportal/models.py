@@ -724,24 +724,17 @@ class Obj(Base, ha.Point):
            The requested Obj.
         """
 
-        if Obj.query.get(obj_id) is None:
-            return None
-        if "System admin" in user_or_token.permissions:
-            return Obj.query.options(options).get(obj_id)
-
-        obj = (
-            DBSession()
-            .query(Obj)
-            .filter(Obj.is_readable_by(user_or_token))
-            .options(options)
-        )
+        obj = Obj.query.options(options).get(obj_id)
 
         if obj is None:
+            return None
+        elif "System admin" in user_or_token.permissions:
+            return obj
+        elif not obj.is_readable_by(user_or_token):
             raise AccessError('Insufficient permissions.')
-
-        # If we get here, the user has access to either the associated Source
-        # or Candidate
-        return obj
+        else:
+            # If we get here, the user has access to the obj.
+            return obj
 
     @hybrid_method
     def is_readable_by(self, user_or_token):
@@ -757,15 +750,15 @@ class Obj(Base, ha.Point):
     def is_readable_by(cls, user_or_token):
         accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
         alias = sa.alias(cls)
-        candfilt = sa.join(Candidate, Filter)
-        phot_grpphot = sa.join(Photometry, GroupPhotometry)
+        cand_x_filt = sa.join(Candidate, Filter)
+        phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
 
         return (
             sa.select([func.count(alias.c.id)])
             .select_from(
                 sa.outerjoin(alias, Source, alias.c.id == Source.obj_id)
-                .outerjoin(candfilt, alias.c.id == Candidate.obj_id)
-                .outerjoin(phot_grpphot, alias.c.id == Photometry.obj_id)
+                .outerjoin(cand_x_filt, alias.c.id == Candidate.obj_id)
+                .outerjoin(phot_x_groupphot, alias.c.id == Photometry.obj_id)
             )
             .where(
                 sa.or_(
