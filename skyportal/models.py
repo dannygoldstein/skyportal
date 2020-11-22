@@ -781,7 +781,7 @@ class Obj(Base, ha.Point):
             user_target_id = user_or_token.id
 
         return (
-            sa.select([alias.c.id, func.count(alias.c.id) > 0])
+            sa.select([(func.count(alias.c.id)).label('privilege_accumulator')])
             .select_from(
                 sa.outerjoin(alias, Source, alias.c.id == Source.obj_id)
                 .outerjoin(cand_x_filt, alias.c.id == Candidate.obj_id)
@@ -798,9 +798,11 @@ class Obj(Base, ha.Point):
                     ),
                 )
             )
-            .where(alias.c.id == cls.id)
+            .where(cls.id == alias.c.id)
+            .correlate(cls)
             .group_by(alias.c.id)
-            .label('ownership_query')
+            .label('is_readable_by')
+            > 0
         )
 
 
