@@ -44,6 +44,7 @@ from baselayer.app.models import (  # noqa
     Token,
     UserACL,
     UserRole,
+    RoleACL,
 )
 from baselayer.app.custom_exceptions import AccessError
 from baselayer.app.env import load_env
@@ -748,29 +749,58 @@ class Obj(Base, ha.Point):
 
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
-        accessible_group_ids = [g.id for g in user_or_token.accessible_groups]
         alias = sa.alias(cls)
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
 
+        # create a a 2-column table, user_id x acl_id
+        user_acls = DBSession().query(
+            UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id')
+        )
+        user_role_acls = (
+            DBSession()
+            .query(UserRole.user_id, RoleACL.acl_id)
+            .join(RoleACL, UserRole.role_id == RoleACL.role_id)
+        )
+        unified_user_acls = user_acls.union(user_role_acls).subquery()
+
+        # create a 2-column table, user_id x accessible_group
+        group_users_sysadmin = (
+            DBSession()
+            .query(
+                Group.id.label('group_id'), unified_user_acls.c.user_id.label('user_id')
+            )
+            .join(unified_user_acls, unified_user_acls.c.acl_id == 'System admin')
+        )
+        normal_group_users = DBSession().query(GroupUser.group_id, GroupUser.user_id)
+        unified_group_users = group_users_sysadmin.union(normal_group_users).subquery()
+
+        if isinstance(user_or_token, Token):
+            user_target_id = user_or_token.created_by_id
+        else:
+            user_target_id = user_or_token.id
+
         return (
-            sa.select([func.count(alias.c.id)])
+            sa.select([alias.c.id, func.count(alias.c.id) > 0])
             .select_from(
                 sa.outerjoin(alias, Source, alias.c.id == Source.obj_id)
                 .outerjoin(cand_x_filt, alias.c.id == Candidate.obj_id)
                 .outerjoin(phot_x_groupphot, alias.c.id == Photometry.obj_id)
-            )
-            .where(
-                sa.or_(
-                    GroupPhotometry.group_id.in_(accessible_group_ids),
-                    Source.group_id.in_(accessible_group_ids),
-                    Filter.group_id.in_(accessible_group_ids),
+                .join(
+                    unified_group_users,
+                    sa.and_(
+                        sa.or_(
+                            GroupPhotometry.group_id == unified_group_users.c.group_id,
+                            Source.group_id == unified_group_users.c.group_id,
+                            Filter.group_id == unified_group_users.c.group_id,
+                        ),
+                        unified_group_users.c.user_id == user_target_id,
+                    ),
                 )
             )
             .where(alias.c.id == cls.id)
             .group_by(alias.c.id)
             .label('ownership_query')
-            > 0
         )
 
 
