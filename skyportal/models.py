@@ -749,7 +749,6 @@ class Obj(Base, ha.Point):
 
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
-        alias = sa.alias(cls)
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
 
@@ -780,29 +779,54 @@ class Obj(Base, ha.Point):
         else:
             user_target_id = user_or_token.id
 
+        source_subq = (
+            DBSession()
+            .query(cls.id)
+            .join(Source, cls.id == Source.obj_id)
+            .join(
+                unified_group_users, Source.group_id == unified_group_users.c.group_id
+            )
+            .filter(unified_group_users.c.user_id == user_target_id)
+            .subquery()
+        )
+
+        cand_subq = (
+            DBSession()
+            .query(cls.id)
+            .join(cand_x_filt, cls.id == Candidate.obj_id)
+            .join(
+                unified_group_users, Filter.group_id == unified_group_users.c.group_id,
+            )
+            .filter(unified_group_users.c.user_id == user_target_id)
+            .subquery()
+        )
+
+        phot_subq = (
+            DBSession()
+            .query(cls.id)
+            .join(phot_x_groupphot, cls.id == Photometry.obj_id)
+            .join(
+                unified_group_users,
+                GroupPhotometry.group_id == unified_group_users.c.group_id,
+            )
+            .filter(unified_group_users.c.user_id == user_target_id)
+            .subquery()
+        )
+
         return (
-            sa.select([(func.count(alias.c.id)).label('privilege_accumulator')])
-            .select_from(
-                sa.outerjoin(alias, Source, alias.c.id == Source.obj_id)
-                .outerjoin(cand_x_filt, alias.c.id == Candidate.obj_id)
-                .outerjoin(phot_x_groupphot, alias.c.id == Photometry.obj_id)
-                .join(
-                    unified_group_users,
-                    sa.and_(
-                        sa.or_(
-                            GroupPhotometry.group_id == unified_group_users.c.group_id,
-                            Source.group_id == unified_group_users.c.group_id,
-                            Filter.group_id == unified_group_users.c.group_id,
-                        ),
-                        unified_group_users.c.user_id == user_target_id,
-                    ),
+            DBSession()
+            .query(
+                func.bool_or(
+                    source_subq.c.id.isnot(None)
+                    | cand_subq.c.id.isnot(None)
+                    | phot_subq.c.id.isnot(None)
                 )
             )
-            .where(cls.id == alias.c.id)
-            .correlate(cls)
-            .group_by(alias.c.id)
-            .label('is_readable_by')
-            > 0
+            .select_from(cls)
+            .outerjoin(source_subq, cls.id == source_subq.c.id)
+            .outerjoin(cand_subq, cls.id == cand_subq.c.id)
+            .outerjoin(phot_subq, cls.id == phot_subq.c.id)
+            .group_by(cls.id)
         )
 
 
