@@ -751,6 +751,7 @@ class Obj(Base, ha.Point):
     def is_readable_by(cls, user_or_token):
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
+        objs = sa.alias(cls)
 
         # create a a 2-column table, user_id x acl_id
         user_acls = DBSession().query(
@@ -781,8 +782,8 @@ class Obj(Base, ha.Point):
 
         source_subq = (
             DBSession()
-            .query(cls.id)
-            .join(Source, cls.id == Source.obj_id)
+            .query(objs.c.id)
+            .join(Source, objs.c.id == Source.obj_id)
             .join(
                 unified_group_users, Source.group_id == unified_group_users.c.group_id
             )
@@ -792,19 +793,16 @@ class Obj(Base, ha.Point):
 
         cand_subq = (
             DBSession()
-            .query(cls.id)
-            .join(cand_x_filt, cls.id == Candidate.obj_id)
-            .join(
-                unified_group_users, Filter.group_id == unified_group_users.c.group_id,
-            )
+            .query(objs.c.id)
+            .join(cand_x_filt, objs.c.id == Candidate.obj_id)
             .filter(unified_group_users.c.user_id == user_target_id)
             .subquery()
         )
 
         phot_subq = (
             DBSession()
-            .query(cls.id)
-            .join(phot_x_groupphot, cls.id == Photometry.obj_id)
+            .query(objs.c.id)
+            .join(phot_x_groupphot, objs.c.id == Photometry.obj_id)
             .join(
                 unified_group_users,
                 GroupPhotometry.group_id == unified_group_users.c.group_id,
@@ -814,19 +812,26 @@ class Obj(Base, ha.Point):
         )
 
         return (
-            DBSession()
-            .query(
-                func.bool_or(
-                    source_subq.c.id.isnot(None)
-                    | cand_subq.c.id.isnot(None)
-                    | phot_subq.c.id.isnot(None)
-                )
+            sa.select(
+                [
+                    func.bool_or(
+                        source_subq.c.id.isnot(None)
+                        | cand_subq.c.id.isnot(None)
+                        | phot_subq.c.id.isnot(None)
+                    )
+                ]
             )
-            .select_from(cls)
-            .outerjoin(source_subq, cls.id == source_subq.c.id)
-            .outerjoin(cand_subq, cls.id == cand_subq.c.id)
-            .outerjoin(phot_subq, cls.id == phot_subq.c.id)
-            .group_by(cls.id)
+            .select_from(
+                sa.outerjoin(objs, source_subq, objs.c.id == source_subq.c.id)
+                .outerjoin(cand_subq, objs.c.id == cand_subq.c.id)
+                .outerjoin(phot_subq, objs.c.id == phot_subq.c.id)
+                # .join(cls, objs.c.id == cls.id)
+            )
+            .where(objs.c.id == cls.id)
+            .group_by(objs.c.id)
+            .correlate(cls)
+            .label('ownership')
+            .is_(True)
         )
 
 
