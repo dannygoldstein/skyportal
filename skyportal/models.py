@@ -741,28 +741,39 @@ class Obj(Base, ha.Point):
     def is_readable_by(self, user_or_token):
         return (
             DBSession()
-            .query(Obj.id)
-            .filter(Obj.is_readable_by(user_or_token), Obj.id == self.id)
-            .count()
-            > 0
+            .query(Obj.is_readable_by(user_or_token))
+            .filter(Obj.id == self.id)
+            .scalar()
         )
 
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
+
+        if isinstance(user_or_token, Token):
+            user_target_id = user_or_token.created_by_id
+        else:
+            user_target_id = user_or_token.id
+
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
-        objs = sa.alias(cls)
 
         # create a a 2-column table, user_id x acl_id
-        user_acls = DBSession().query(
-            UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id')
+        user_acls = (
+            DBSession()
+            .query(UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id'))
+            .filter(UserACL.user_id == user_target_id)
         )
+
         user_role_acls = (
             DBSession()
             .query(UserRole.user_id, RoleACL.acl_id)
             .join(RoleACL, UserRole.role_id == RoleACL.role_id)
+            .filter(UserRole.user_id == user_target_id)
         )
-        unified_user_acls = user_acls.union(user_role_acls).subquery()
+
+        unified_user_acls = user_acls.union(user_role_acls).subquery(
+            'unified_user_acls'
+        )
 
         # create a 2-column table, user_id x accessible_group
         group_users_sysadmin = (
@@ -772,64 +783,59 @@ class Obj(Base, ha.Point):
             )
             .join(unified_user_acls, unified_user_acls.c.acl_id == 'System admin')
         )
-        normal_group_users = DBSession().query(GroupUser.group_id, GroupUser.user_id)
-        unified_group_users = group_users_sysadmin.union(normal_group_users).subquery()
 
-        if isinstance(user_or_token, Token):
-            user_target_id = user_or_token.created_by_id
-        else:
-            user_target_id = user_or_token.id
+        normal_group_users = (
+            DBSession()
+            .query(GroupUser.group_id, GroupUser.user_id)
+            .filter(GroupUser.user_id == user_target_id)
+        )
+
+        unified_group_users = group_users_sysadmin.union(normal_group_users).cte()
+
+        alias = sa.alias(cls)
 
         source_subq = (
-            DBSession()
-            .query(objs.c.id)
-            .join(Source, objs.c.id == Source.obj_id)
-            .join(
-                unified_group_users, Source.group_id == unified_group_users.c.group_id
+            sa.select([Source.obj_id])
+            .select_from(
+                sa.join(
+                    Source,
+                    unified_group_users,
+                    Source.group_id == unified_group_users.c.group_id,
+                )
             )
-            .filter(unified_group_users.c.user_id == user_target_id)
-            .subquery()
+            .where(Source.obj_id == alias.c.id)
         )
 
         cand_subq = (
-            DBSession()
-            .query(objs.c.id)
-            .join(cand_x_filt, objs.c.id == Candidate.obj_id)
-            .filter(unified_group_users.c.user_id == user_target_id)
-            .subquery()
+            sa.select([Candidate.obj_id])
+            .select_from(
+                sa.join(
+                    cand_x_filt,
+                    unified_group_users,
+                    Filter.group_id == unified_group_users.c.group_id,
+                )
+            )
+            .where(Candidate.obj_id == alias.c.id)
         )
 
         phot_subq = (
-            DBSession()
-            .query(objs.c.id)
-            .join(phot_x_groupphot, objs.c.id == Photometry.obj_id)
-            .join(
-                unified_group_users,
-                GroupPhotometry.group_id == unified_group_users.c.group_id,
+            sa.select([Photometry.obj_id.label('obj_id')])
+            .select_from(
+                sa.join(
+                    phot_x_groupphot,
+                    unified_group_users,
+                    GroupPhotometry.group_id == unified_group_users.c.group_id,
+                )
             )
-            .filter(unified_group_users.c.user_id == user_target_id)
-            .subquery()
+            .where(Photometry.obj_id == alias.c.id)
         )
 
+        lateral = sa.union(phot_subq, source_subq, cand_subq).lateral('sq')
+
         return (
-            sa.select(
-                [
-                    func.bool_or(
-                        source_subq.c.id.isnot(None)
-                        | cand_subq.c.id.isnot(None)
-                        | phot_subq.c.id.isnot(None)
-                    )
-                ]
-            )
-            .select_from(
-                sa.outerjoin(objs, source_subq, objs.c.id == source_subq.c.id)
-                .outerjoin(cand_subq, objs.c.id == cand_subq.c.id)
-                .outerjoin(phot_subq, objs.c.id == phot_subq.c.id)
-                # .join(cls, objs.c.id == cls.id)
-            )
-            .where(objs.c.id == cls.id)
-            .group_by(objs.c.id)
-            .correlate(cls)
+            sa.select([lateral.c.obj_id.isnot(None)])
+            .select_from(sa.outerjoin(alias, lateral, alias.c.id == lateral.c.obj_id))
+            .where(alias.c.id == cls.id)
             .label('ownership')
             .is_(True)
         )
