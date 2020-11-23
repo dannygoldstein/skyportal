@@ -757,45 +757,35 @@ class Obj(Base, ha.Point):
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
 
+        user_alias = sa.alias(User)
+
         # create a a 2-column table, user_id x acl_id
-        user_acls = (
-            DBSession()
-            .query(UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id'))
-            .filter(UserACL.user_id == user_target_id)
+        user_acls = sa.select(
+            [UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id')]
         )
 
-        user_role_acls = (
-            DBSession()
-            .query(UserRole.user_id, RoleACL.acl_id)
-            .join(RoleACL, UserRole.role_id == RoleACL.role_id)
-            .filter(UserRole.user_id == user_target_id)
+        user_role_acls = sa.select([UserRole.user_id, RoleACL.acl_id]).select_from(
+            sa.join(RoleACL, UserRole, UserRole.role_id == RoleACL.role_id)
         )
 
-        unified_user_acls = user_acls.union(user_role_acls).subquery(
-            'unified_user_acls'
-        )
+        unified_user_acls = sa.union(user_acls, user_role_acls).alias('acl_union')
 
         # create a 2-column table, user_id x accessible_group
-        group_users_sysadmin = (
-            DBSession()
-            .query(
-                Group.id.label('group_id'), unified_user_acls.c.user_id.label('user_id')
+        group_users_sysadmin = sa.select(
+            [Group.id.label('group_id'), unified_user_acls.c.user_id.label('user_id')]
+        ).select_from(
+            sa.join(
+                Group, unified_user_acls, unified_user_acls.c.acl_id == 'System admin'
             )
-            .join(unified_user_acls, unified_user_acls.c.acl_id == 'System admin')
         )
 
-        normal_group_users = (
-            DBSession()
-            .query(GroupUser.group_id, GroupUser.user_id)
-            .filter(GroupUser.user_id == user_target_id)
-        )
+        normal_group_users = sa.select([GroupUser.group_id, GroupUser.user_id])
 
         unified_group_users = group_users_sysadmin.union(normal_group_users).cte()
 
         alias = sa.alias(cls)
-
         source_subq = (
-            sa.select([Source.obj_id])
+            sa.select([Source.obj_id, unified_group_users.c.user_id])
             .select_from(
                 sa.join(
                     Source,
@@ -804,10 +794,11 @@ class Obj(Base, ha.Point):
                 )
             )
             .where(Source.obj_id == alias.c.id)
+            .where(unified_group_users.c.user_id == user_alias.c.id)
         )
 
         cand_subq = (
-            sa.select([Candidate.obj_id])
+            sa.select([Candidate.obj_id, unified_group_users.c.user_id])
             .select_from(
                 sa.join(
                     cand_x_filt,
@@ -816,10 +807,16 @@ class Obj(Base, ha.Point):
                 )
             )
             .where(Candidate.obj_id == alias.c.id)
+            .where(unified_group_users.c.user_id == user_alias.c.id)
         )
 
         phot_subq = (
-            sa.select([Photometry.obj_id.label('obj_id')])
+            sa.select(
+                [
+                    Photometry.obj_id.label('obj_id'),
+                    unified_group_users.c.user_id.label('user_id'),
+                ]
+            )
             .select_from(
                 sa.join(
                     phot_x_groupphot,
@@ -828,14 +825,20 @@ class Obj(Base, ha.Point):
                 )
             )
             .where(Photometry.obj_id == alias.c.id)
+            .where(unified_group_users.c.user_id == user_alias.c.id)
         )
 
         lateral = sa.union(phot_subq, source_subq, cand_subq).lateral('sq')
 
         return (
             sa.select([lateral.c.obj_id.isnot(None)])
-            .select_from(sa.outerjoin(alias, lateral, alias.c.id == lateral.c.obj_id))
+            .select_from(
+                sa.join(alias, user_alias, sa.literal(True)).outerjoin(
+                    lateral, alias.c.id == lateral.c.obj_id
+                )
+            )
             .where(alias.c.id == cls.id)
+            .where(user_alias.c.id == user_target_id)
             .label('ownership')
             .is_(True)
         )
