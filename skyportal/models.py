@@ -749,39 +749,11 @@ class Obj(Base, ha.Point):
     @is_readable_by.expression
     def is_readable_by(cls, user_or_token):
 
-        if isinstance(user_or_token, Token):
-            user_target_id = user_or_token.created_by_id
-        else:
-            user_target_id = user_or_token.id
-
         cand_x_filt = sa.join(Candidate, Filter)
         phot_x_groupphot = sa.join(Photometry, GroupPhotometry)
 
         user_alias = sa.alias(User)
-
-        # create a a 2-column table, user_id x acl_id
-        user_acls = sa.select(
-            [UserACL.user_id.label('user_id'), UserACL.acl_id.label('acl_id')]
-        )
-
-        user_role_acls = sa.select([UserRole.user_id, RoleACL.acl_id]).select_from(
-            sa.join(RoleACL, UserRole, UserRole.role_id == RoleACL.role_id)
-        )
-
-        unified_user_acls = sa.union(user_acls, user_role_acls).alias('acl_union')
-
-        # create a 2-column table, user_id x accessible_group
-        group_users_sysadmin = sa.select(
-            [Group.id.label('group_id'), unified_user_acls.c.user_id.label('user_id')]
-        ).select_from(
-            sa.join(
-                Group, unified_user_acls, unified_user_acls.c.acl_id == 'System admin'
-            )
-        )
-
-        normal_group_users = sa.select([GroupUser.group_id, GroupUser.user_id])
-
-        unified_group_users = group_users_sysadmin.union(normal_group_users).cte()
+        unified_group_users = user_accessible_groups_temporary_table()
 
         alias = sa.alias(cls)
         source_subq = (
@@ -828,7 +800,12 @@ class Obj(Base, ha.Point):
             .where(unified_group_users.c.user_id == user_alias.c.id)
         )
 
-        lateral = sa.union(phot_subq, source_subq, cand_subq).lateral('sq')
+        lateral = sa.union(phot_subq, source_subq, cand_subq).lateral()
+
+        if isinstance(user_or_token, Token) or user_or_token is Token:
+            user_target_id = user_or_token.created_by_id
+        else:
+            user_target_id = user_or_token.id
 
         return (
             sa.select([lateral.c.obj_id.isnot(None)])
@@ -1283,6 +1260,50 @@ User.sources = relationship(
 isadmin = property(lambda self: "System admin" in self.permissions)
 User.is_system_admin = isadmin
 Token.is_system_admin = isadmin
+
+
+def user_accessible_groups_temporary_table():
+    """"""
+
+    sql = """
+CREATE TEMP TABLE IF NOT EXISTS user_accessible_groups ON COMMIT DROP
+AS
+  (SELECT user_id,
+          group_id
+   FROM group_users
+   UNION SELECT sq.user_id,
+                sq.group_id
+   FROM
+     (SELECT uacl.user_id AS user_id,
+             g.id AS group_id
+      FROM
+        (SELECT u.id AS user_id,
+                ra.acl_id AS acl_id
+         FROM users u
+         JOIN user_roles ur ON u.id = ur.user_id
+         JOIN role_acls ra ON ur.role_id = ra.role_id
+         UNION SELECT ua.user_id,
+                      ua.acl_id
+         FROM user_acls ua) uacl
+      JOIN groups g ON uacl.acl_id = 'System admin') sq);"""
+    DBSession().execute(sql)
+    DBSession().execute(
+        'CREATE INDEX IF NOT EXISTS user_accessible_groups_forward_index '
+        'ON user_accessible_groups (user_id, group_id)'
+    )
+    DBSession().execute(
+        'CREATE INDEX IF NOT EXISTS user_accessible_groups_reverse_index '
+        'ON user_accessible_groups (group_id, user_id)'
+    )
+
+    t = sa.Table(
+        'user_accessible_groups',
+        Base.metadata,
+        sa.Column('user_id', sa.Integer, primary_key=True),
+        sa.Column('group_id', sa.Integer, primary_key=True),
+        extend_existing=True,
+    )
+    return t
 
 
 class SourceView(Base):
