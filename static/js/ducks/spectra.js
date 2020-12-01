@@ -46,7 +46,7 @@ const reducer = (state = { parsed: null }, action) => {
       if (spectra.length > 0) {
         const sourceID = spectra[0].obj_id;
         return {
-          ...state,
+          parsed: state.parsed,
           [sourceID]: spectra,
         };
       }
